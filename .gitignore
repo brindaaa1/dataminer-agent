@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+.env
+
+# 运行时产物：数据、切分缓存、模型、日志——都是可重新生成的，体积大，不提交
+data_raw/
+artifacts/
+artifacts_*/

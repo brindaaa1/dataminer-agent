@@ -1,0 +1,62 @@
+{
+ "dataset": "hotel_bookings",
+ "rows": {
+  "agent": {
+   "oot_dev_auc": 0.8292261112095856,
+   "holdout_auc": 0.7751651103031778,
+   "wall_sec": 36.389644145965576,
+   "n_features": 27,
+   "model": "lr_scorecard"
+  },
+  "B0 默认 LightGBM": {
+   "name": "b0_hotel_bookings",
+   "oot_dev_auc": 0.8325469382746349,
+   "oot_dev_ks": 0.5043638240850578,
+   "holdout_auc": 0.7852261277461388,
+   "wall_sec": 1.1921968460083008,
+   "n_features": 27,
+   "best_iter": 500
+  },
+  "B1 FLAML（对齐算力 36s）": {
+   "name": "b1_hotel_bookings",
+   "oot_dev_auc": 0.8187869374262389,
+   "oot_dev_ks": 0.4741842519494175,
+   "holdout_auc": 0.7785769166429328,
+   "wall_sec": 36.39362096786499,
+   "n_features": 27,
+   "best_estimator": "xgb_limitdepth",
+   "time_budget": 36.389644145965576,
+   "best_config": {
+    "n_estimators": 165,
+    "max_depth": 11,
+    "min_child_weight": 0.008107656024556643,
+    "learning_rate": 0.10429710241573707,
+    "subsample": 0.8322505194853861,
+    "colsample_bylevel": 1.0,
+    "colsample_bytree": 0.45588722641804524,
+    "reg_alpha": 0.024466862886082536,
+    "reg_lambda": 0.037216165772849835
+   }
+  }
+ },
+ "agent_vs_baseline": {
+  "B0 默认 LightGBM": {
+   "agent_minus_baseline_oot_dev": -0.0033208270650492144,
+   "ci": [
+    -0.006751738502507365,
+    0.00011648454175108069
+   ],
+   "agent_significantly_better": false,
+   "agent_minus_baseline_holdout": -0.010061017442960951
+  },
+  "B1 FLAML（对齐算力 36s）": {
+   "agent_minus_baseline_oot_dev": 0.010439173783346911,
+   "ci": [
+    0.006825088171783428,
+    0.014141852229272051
+   ],
+   "agent_significantly_better": true,
+   "agent_minus_baseline_holdout": -0.003411806339755019
+  }
+ }
+}

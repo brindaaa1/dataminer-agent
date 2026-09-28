@@ -1,0 +1,153 @@
+# Home Credit 上的模板实例化
+# 每个模板对应 generic_credit.yaml 中的一个 family，并映射到具体表和字段。
+# factory.py 把模板展开成 DuckDB SQL；所有查询都先应用 home_credit/data_dictionary.yaml 中的 pit_rules。
+# 窗口单位：time_unit = days 时按 DAYS_* >= -w 过滤；time_unit = months 时按 MONTHS_BALANCE >= -w 过滤。
+# "all" 表示不做窗口过滤。
+
+templates:
+  - id: hc_prev_app_count
+    family: multi_lending
+    source: previous_application
+    entity: SK_ID_CURR
+    time_field: DAYS_DECISION
+    time_unit: days
+    windows: [30, 90, 180, 365, all]
+    aggs: [count]
+    derived: ["ratio(90/365)", "recency: -max(DAYS_DECISION)"]
+    monotone_prior: +1
+    rationale: 近期在本机构的申请次数激增。
+
+  - id: hc_bureau_new_accounts
+    family: multi_lending
+    source: bureau
+    entity: SK_ID_CURR
+    time_field: DAYS_CREDIT
+    time_unit: days
+    windows: [90, 180, 365, all]
+    aggs: [count, count_distinct(CREDIT_TYPE)]
+    derived: ["ratio(90/365)", "recency: -max(DAYS_CREDIT)"]
+    monotone_prior: +1
+    rationale: 近期在其他机构开立的新贷款数量。
+
+  - id: hc_prev_refusal
+    family: application_outcome
+    source: previous_application
+    entity: SK_ID_CURR
+    time_field: DAYS_DECISION
+    time_unit: days
+    windows: [365, all]
+    aggs:
+      - "count_if(NAME_CONTRACT_STATUS = 'Refused')"
+      - "avg(NAME_CONTRACT_STATUS = 'Refused')"
+      - "avg(AMT_CREDIT / NULLIF(AMT_APPLICATION, 0))   # 批准金额相对申请金额，monotone_prior: -1"
+    derived: ["recency: -max(DAYS_DECISION) where Refused"]
+    monotone_prior: +1
+    rationale: 历史被拒次数和比例；批准金额被打折说明此前已被判定为较高风险。
+
+  - id: hc_bureau_overdue
+    family: delinquency_history
+    source: bureau
+    entity: SK_ID_CURR
+    time_field: DAYS_CREDIT
+    time_unit: days
+    windows: [365, all]
+    aggs: [max(CREDIT_DAY_OVERDUE), sum(AMT_CREDIT_SUM_OVERDUE), "count_if(CREDIT_DAY_OVERDUE > 0)",
+           "count_if(CREDIT_ACTIVE = 'Bad debt')"]
+    monotone_prior: +1
+    rationale: 其他机构的逾期和坏账记录。
+
+  - id: hc_bureau_balance_status
+    family: delinquency_history
+    source: bureau_balance
+    via: bureau                   # 两级聚合：先按 SK_ID_BUREAU，再按 SK_ID_CURR
+    entity: SK_ID_CURR
+    time_field: MONTHS_BALANCE
+    time_unit: months
+    windows: [6, 12, 24, all]
+    aggs:
+      - "share of months with STATUS in ('1','2','3','4','5')"
+      - "max of numeric STATUS (C/X 视为 0 或缺失)"
+    derived: ["trend(6 vs 24)"]
+    monotone_prior: +1
+    rationale: 月度逾期状态的占比和最高档位，比单一快照更能反映逾期模式。
+
+  - id: hc_pos_dpd
+    family: delinquency_history
+    source: POS_CASH_balance
+    entity: SK_ID_CURR
+    time_field: MONTHS_BALANCE
+    time_unit: months
+    windows: [6, 12, all]
+    aggs: [max(SK_DPD), max(SK_DPD_DEF), "avg(SK_DPD_DEF > 0)"]
+    monotone_prior: +1
+    rationale: POS/现金贷的逾期天数；SK_DPD_DEF 剔除了小额容忍，更干净。
+
+  - id: hc_installment_behavior
+    family: repayment_behavior
+    source: installments_payments
+    entity: SK_ID_CURR
+    time_field: DAYS_INSTALMENT
+    time_unit: days
+    windows: [90, 180, 365, all]
+    aggs:
+      - "avg(greatest(DAYS_ENTRY_PAYMENT - DAYS_INSTALMENT, 0))"
+      - "max(DAYS_ENTRY_PAYMENT - DAYS_INSTALMENT)"
+      - "avg(DAYS_ENTRY_PAYMENT > DAYS_INSTALMENT)"
+      - "avg(AMT_PAYMENT / NULLIF(AMT_INSTALMENT, 0))   # monotone_prior: -1"
+      - "avg(AMT_PAYMENT < AMT_INSTALMENT)"
+    derived: ["trend(90 vs all)"]
+    monotone_prior: +1
+    rationale: 习惯性晚还、少还；近期相对全期的恶化趋势是早期预警信号。
+
+  - id: hc_card_utilization
+    family: utilization
+    source: credit_card_balance
+    entity: SK_ID_CURR
+    time_field: MONTHS_BALANCE
+    time_unit: months
+    windows: [3, 6, 12, all]
+    aggs:
+      - "avg(AMT_BALANCE / NULLIF(AMT_CREDIT_LIMIT_ACTUAL, 0))"
+      - "max(AMT_BALANCE / NULLIF(AMT_CREDIT_LIMIT_ACTUAL, 0))"
+      - "avg(AMT_PAYMENT_CURRENT < AMT_INST_MIN_REGULARITY)"
+      - "sum(AMT_DRAWINGS_CURRENT)"
+    derived: ["trend(3 vs 12)"]
+    monotone_prior: +1
+    rationale: 信用卡额度使用率和未还清最低还款额的比例。
+
+  - id: hc_bureau_debt_burden
+    family: debt_burden
+    source: bureau
+    join_with: application_train
+    entity: SK_ID_CURR
+    filter: "CREDIT_ACTIVE = 'Active'"
+    windows: [current]
+    aggs: [sum(AMT_CREDIT_SUM_DEBT), sum(AMT_CREDIT_SUM)]
+    derived:
+      - "ratio(sum(AMT_CREDIT_SUM_DEBT) / AMT_INCOME_TOTAL)"
+      - "ratio(sum(AMT_CREDIT_SUM_DEBT) / sum(AMT_CREDIT_SUM))"
+    monotone_prior: +1
+    rationale: 在其他机构的未偿债务相对收入和相对授信总额的比例。
+
+  - id: hc_credit_depth
+    family: credit_depth
+    source: bureau
+    entity: SK_ID_CURR
+    windows: [all]
+    aggs: ["-min(DAYS_CREDIT)   # 最早一笔贷款距今天数", count, "count_if(CREDIT_ACTIVE = 'Closed')"]
+    derived: ["ratio(closed/total)"]
+    monotone_prior: -1
+    rationale: 信用历史越长、结清的记录越多，风险越低。
+
+  - id: hc_request_profile
+    family: loan_request_profile
+    source: application_train
+    entity: SK_ID_CURR
+    windows: [current]
+    aggs:
+      - "AMT_CREDIT / AMT_INCOME_TOTAL"
+      - "AMT_ANNUITY / AMT_INCOME_TOTAL"
+      - "AMT_CREDIT / NULLIF(AMT_GOODS_PRICE, 0)"
+      - "AMT_CREDIT / NULLIF(AMT_ANNUITY, 0)   # 隐含期限，monotone_prior: 0"
+    monotone_prior: +1
+    rationale: 本次借款规模相对收入和商品价格的比例。

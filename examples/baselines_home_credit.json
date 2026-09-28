@@ -1,0 +1,140 @@
+{
+ "dataset": "home_credit",
+ "rows": {
+  "agent": {
+   "oot_dev_auc": 0.7664414290889309,
+   "holdout_auc": 0.7692648709308978,
+   "wall_sec": 142.15006518363953,
+   "n_features": 150,
+   "model": "lgbm"
+  },
+  "B0 默认 LightGBM": {
+   "name": "b0_home_credit",
+   "oot_dev_auc": 0.7487003781122483,
+   "oot_dev_ks": 0.36692132982491626,
+   "holdout_auc": 0.7451757523435911,
+   "wall_sec": 2.2623038291931152,
+   "n_features": 122,
+   "best_iter": 158
+  },
+  "B1 FLAML（对齐算力 142s）": {
+   "name": "b1_home_credit",
+   "oot_dev_auc": 0.7510095113000956,
+   "oot_dev_ks": 0.3712537543555427,
+   "holdout_auc": 0.7488726307045429,
+   "wall_sec": 142.0764980316162,
+   "n_features": 122,
+   "best_estimator": "xgboost",
+   "time_budget": 142.15006518363953,
+   "best_config": {
+    "n_estimators": 1410,
+    "max_leaves": 14,
+    "min_child_weight": 0.052145463959818644,
+    "learning_rate": 0.03314359071775624,
+    "subsample": 0.9012998438881227,
+    "colsample_bylevel": 0.9501681897814542,
+    "colsample_bytree": 0.9146638719748571,
+    "reg_alpha": 0.26542631510478965,
+    "reg_lambda": 0.023522331143824123
+   }
+  },
+  "B1 FLAML（扩大预算 300s）": {
+   "name": "b1x_home_credit",
+   "oot_dev_auc": 0.7518735432826839,
+   "oot_dev_ks": 0.36940669295508954,
+   "holdout_auc": 0.7506874868928778,
+   "wall_sec": 300.99794697761536,
+   "n_features": 122,
+   "best_estimator": "xgboost",
+   "time_budget": 300.0,
+   "best_config": {
+    "n_estimators": 4337,
+    "max_leaves": 6,
+    "min_child_weight": 0.03597820906845832,
+    "learning_rate": 0.033582954072739375,
+    "subsample": 0.9551437340325919,
+    "colsample_bylevel": 0.8528434900722114,
+    "colsample_bytree": 0.7643622462781045,
+    "reg_alpha": 1.9376977468791408,
+    "reg_lambda": 0.006267239076250908
+   }
+  },
+  "B0 + 工厂特征": {
+   "name": "b0f_home_credit",
+   "oot_dev_auc": 0.7623703456737955,
+   "oot_dev_ks": 0.39826459009181947,
+   "holdout_auc": 0.7616045913736933,
+   "wall_sec": 2.4497909545898438,
+   "n_features": 150,
+   "best_iter": 119
+  },
+  "B1 + 工厂特征（对齐算力 142s）": {
+   "name": "b1f_home_credit",
+   "oot_dev_auc": 0.768313076736342,
+   "oot_dev_ks": 0.40656151487540626,
+   "holdout_auc": 0.7673557587524537,
+   "wall_sec": 142.03640413284302,
+   "n_features": 150,
+   "best_estimator": "xgboost",
+   "time_budget": 142.15006518363953,
+   "best_config": {
+    "n_estimators": 723,
+    "max_leaves": 6,
+    "min_child_weight": 0.005593946651455952,
+    "learning_rate": 0.0854107283985989,
+    "subsample": 0.8860944096298553,
+    "colsample_bylevel": 0.9026753002907572,
+    "colsample_bytree": 0.6940944210220248,
+    "reg_alpha": 0.07533875160142486,
+    "reg_lambda": 0.27514096910292557
+   }
+  }
+ },
+ "agent_vs_baseline": {
+  "B0 默认 LightGBM": {
+   "agent_minus_baseline_oot_dev": 0.01774105097668255,
+   "ci": [
+    0.01341646984144872,
+    0.021878683203626785
+   ],
+   "agent_significantly_better": true,
+   "agent_minus_baseline_holdout": 0.024089118587306668
+  },
+  "B1 FLAML（对齐算力 142s）": {
+   "agent_minus_baseline_oot_dev": 0.015431917788835237,
+   "ci": [
+    0.010900999947551388,
+    0.01968179687636431
+   ],
+   "agent_significantly_better": true,
+   "agent_minus_baseline_holdout": 0.020392240226354885
+  },
+  "B1 FLAML（扩大预算 300s）": {
+   "agent_minus_baseline_oot_dev": 0.014567885806247016,
+   "ci": [
+    0.010266700745978819,
+    0.01855560631678811
+   ],
+   "agent_significantly_better": true,
+   "agent_minus_baseline_holdout": 0.018577384038020006
+  },
+  "B0 + 工厂特征": {
+   "agent_minus_baseline_oot_dev": 0.004071083415135401,
+   "ci": [
+    0.001319903977048248,
+    0.006594412150030892
+   ],
+   "agent_significantly_better": true,
+   "agent_minus_baseline_holdout": 0.007660279557204497
+  },
+  "B1 + 工厂特征（对齐算力 142s）": {
+   "agent_minus_baseline_oot_dev": -0.001871647647411212,
+   "ci": [
+    -0.004832126861006164,
+    0.0008755173854438689
+   ],
+   "agent_significantly_better": false,
+   "agent_minus_baseline_holdout": 0.001909112178444139
+  }
+ }
+}

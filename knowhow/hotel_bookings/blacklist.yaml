@@ -1,0 +1,39 @@
+# Hotel Booking Demand 黑名单与字段使用策略
+
+leakage:
+  action: drop_at_load
+  fields:
+    - reservation_status        # 仅用于校验 label，校验后剔除
+    - reservation_status_date
+    - assigned_room_type        # 入住时分配
+    - required_car_parking_spaces
+  derived_fields: [room_mismatch]
+  eval_ground_truth: true       # 泄漏检测评估中作为标准答案（与 Lending Club 相同用法）
+
+unknown_availability:
+  # 从预订到入住/取消期间会被更新，或可得时间存疑。
+  # L1 模式：进入 LEAK_SUSPECT，请求人工确认；
+  # L0 模式（以及录制演示时）：按 quarantine 处理，不进入主模型，在报告中单独列出。
+  policy: quarantine
+  fields:
+    - country
+    - booking_changes
+    - days_in_waiting_list
+    - adr
+    - total_of_special_requests
+  derived_fields: [price_per_guest]
+  eval_ground_truth: suspected  # 评估时单独统计：agent 是否把它们识别为可疑
+
+compliance:
+  review: [country]             # 国籍信息；本场景下同时存在可得时间问题，默认隔离
+
+meta:
+  action: drop_at_load
+  fields: [arrival_date_year]   # 用于切分，不作为特征
+
+leakage_patterns:
+  - "status"
+  - "^assigned_"
+  - "_date$"                    # 除显式登记为 at_booking 的日期字段外
+  - "actual"
+  - "checkin|check_in|checkout|check_out"

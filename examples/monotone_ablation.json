@@ -1,0 +1,80 @@
+{
+ "free": {
+  "train_auc": 0.7635482909265409,
+  "valid_auc": 0.674843083284168,
+  "oot_dev_auc": 0.6718327765825338,
+  "oot_dev_ks": 0.24952616976618813,
+  "gap": 0.003010306701634158,
+  "score_psi": 0.002404989955911849,
+  "holdout": 0.6771642695987097,
+  "violations": [
+   "pub_rec_bankruptcies"
+  ]
+ },
+ "monotone": {
+  "train_auc": 0.747691784536692,
+  "valid_auc": 0.6747424797483742,
+  "oot_dev_auc": 0.6720458013243107,
+  "oot_dev_ks": 0.25077533408925534,
+  "gap": 0.0026966784240635144,
+  "score_psi": 0.002381909970546074,
+  "holdout": 0.6780597282806402,
+  "violations": []
+ },
+ "compare": {
+  "delta": 0.00021302474177686825,
+  "ci_low": -0.0009071389703389499,
+  "ci_high": 0.001360065150616146,
+  "alpha": 0.05,
+  "significant": false,
+  "k": 1
+ },
+ "verdict": "INCONCLUSIVE",
+ "report": {
+  "constrained": [
+   "annual_inc",
+   "dti",
+   "delinq_2yrs",
+   "earliest_cr_line",
+   "fico_range_low",
+   "fico_range_high",
+   "inq_last_6mths",
+   "pub_rec",
+   "revol_util",
+   "pub_rec_bankruptcies"
+  ],
+  "no_prior": [
+   "funded_amnt",
+   "mths_since_last_record",
+   "open_acc",
+   "revol_bal",
+   "collections_12_mths_ex_med",
+   "acc_now_delinq",
+   "tot_coll_amt",
+   "tot_cur_bal",
+   "open_acc_6m",
+   "open_il_12m",
+   "il_util",
+   "all_util",
+   "total_rev_hi_lim",
+   "inq_last_12m"
+  ],
+  "zero_prior": [
+   "mths_since_last_delinq",
+   "total_acc"
+  ],
+  "categorical": [
+   "term",
+   "emp_length",
+   "home_ownership",
+   "verification_status",
+   "purpose",
+   "addr_state",
+   "initial_list_status",
+   "application_type"
+  ],
+  "disagree": {
+   "loan_amnt": -0.0223
+  }
+ }
+}

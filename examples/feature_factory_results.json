@@ -1,0 +1,110 @@
+{
+ "n_base_features": 122,
+ "n_factory_features_kept": 28,
+ "templates": {
+  "hc_request_profile": {
+   "kept": 2,
+   "funnel": {
+    "candidates": 4,
+    "after_missing": 4,
+    "kept": 2,
+    "leak_suspect": 0,
+    "dropped_by": {
+     "missing": 0,
+     "low_iv": 2,
+     "corr": 0,
+     "psi": 0
+    }
+   },
+   "leak_suspect": {}
+  },
+  "hc_prev_refusal": {
+   "kept": 6,
+   "funnel": {
+    "candidates": 6,
+    "after_missing": 6,
+    "kept": 6,
+    "leak_suspect": 0,
+    "dropped_by": {
+     "missing": 0,
+     "low_iv": 0,
+     "corr": 0,
+     "psi": 0
+    }
+   },
+   "leak_suspect": {}
+  },
+  "hc_bureau_overdue": {
+   "kept": 0,
+   "funnel": {
+    "candidates": 8,
+    "after_missing": 8,
+    "kept": 0,
+    "leak_suspect": 0,
+    "dropped_by": {
+     "missing": 0,
+     "low_iv": 8,
+     "corr": 0,
+     "psi": 0
+    }
+   },
+   "leak_suspect": {}
+  },
+  "hc_installment_behavior": {
+   "kept": 20,
+   "funnel": {
+    "candidates": 25,
+    "after_missing": 25,
+    "kept": 20,
+    "leak_suspect": 0,
+    "dropped_by": {
+     "missing": 0,
+     "low_iv": 4,
+     "corr": 1,
+     "psi": 0
+    }
+   },
+   "leak_suspect": {}
+  }
+ },
+ "baseline": {
+  "oot_dev_auc": 0.7500192984222499,
+  "holdout_auc": 0.7480942578398185
+ },
+ "factory": {
+  "oot_dev_auc": 0.7664414290889309,
+  "holdout_auc": 0.7692648709308978
+ },
+ "oot_dev_delta": {
+  "delta": 0.016422130666680967,
+  "ci_low": 0.01229748706553987,
+  "ci_high": 0.020239764334857573,
+  "alpha": 0.05,
+  "significant": true
+ },
+ "holdout_delta": 0.02117061309107926,
+ "trials": 20,
+ "note": "随机切分近似 OOT；EXT_SOURCE 默认保留（know-how 约定）",
+ "per_template": {
+  "hc_request_profile": {
+   "n_kept": 2,
+   "oot_dev_auc": 0.7583148976864356,
+   "holdout_auc": 0.7566139617348109
+  },
+  "hc_prev_refusal": {
+   "n_kept": 6,
+   "oot_dev_auc": 0.751577083029509,
+   "holdout_auc": 0.7502935431602991
+  },
+  "hc_bureau_overdue": {
+   "n_kept": 0,
+   "oot_dev_auc": 0.7500192984222499,
+   "holdout_auc": 0.7480942578398185
+  },
+  "hc_installment_behavior": {
+   "n_kept": 20,
+   "oot_dev_auc": 0.7596401462826107,
+   "holdout_auc": 0.7587786156834087
+  }
+ }
+}

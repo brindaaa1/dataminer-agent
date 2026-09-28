@@ -1,0 +1,90 @@
+{
+ "dataset": "lending_club",
+ "rows": {
+  "agent": {
+   "oot_dev_auc": 0.6735415720616532,
+   "holdout_auc": 0.6786960048541251,
+   "wall_sec": 78.99290108680725,
+   "n_features": 35,
+   "model": "lgbm"
+  },
+  "B0 默认 LightGBM": {
+   "name": "b0_lending_club",
+   "oot_dev_auc": 0.6688607368991852,
+   "oot_dev_ks": 0.2455372194621519,
+   "holdout_auc": 0.673998663254749,
+   "wall_sec": 1.1505131721496582,
+   "n_features": 35,
+   "best_iter": 103
+  },
+  "B1 FLAML（对齐算力 79s）": {
+   "name": "b1_lending_club",
+   "oot_dev_auc": 0.6708636316289964,
+   "oot_dev_ks": 0.24596971864288952,
+   "holdout_auc": 0.6770846604508942,
+   "wall_sec": 78.95917701721191,
+   "n_features": 35,
+   "best_estimator": "lgbm",
+   "time_budget": 78.99290108680725,
+   "best_config": {
+    "n_estimators": 706,
+    "num_leaves": 4,
+    "min_child_samples": 36,
+    "learning_rate": 0.080930489377168,
+    "log_max_bin": 10,
+    "colsample_bytree": 0.5377557064790577,
+    "reg_alpha": 1.253974264437638,
+    "reg_lambda": 13.094733476506823
+   }
+  },
+  "B1 FLAML（扩大预算 300s）": {
+   "name": "b1x_lending_club",
+   "oot_dev_auc": 0.6737210402249518,
+   "oot_dev_ks": 0.2532430175972048,
+   "holdout_auc": 0.6797040666779055,
+   "wall_sec": 352.6187400817871,
+   "n_features": 35,
+   "best_estimator": "lgbm",
+   "time_budget": 300.0,
+   "best_config": {
+    "n_estimators": 623,
+    "num_leaves": 10,
+    "min_child_samples": 73,
+    "learning_rate": 0.18739900071621846,
+    "log_max_bin": 7,
+    "colsample_bytree": 0.2616164042036867,
+    "reg_alpha": 0.013143367627114436,
+    "reg_lambda": 1024.0
+   }
+  }
+ },
+ "agent_vs_baseline": {
+  "B0 默认 LightGBM": {
+   "agent_minus_baseline_oot_dev": 0.004680835162468089,
+   "ci": [
+    0.0037802874007840715,
+    0.005649768383241055
+   ],
+   "agent_significantly_better": true,
+   "agent_minus_baseline_holdout": 0.00469734159937607
+  },
+  "B1 FLAML（对齐算力 79s）": {
+   "agent_minus_baseline_oot_dev": 0.002677940432656678,
+   "ci": [
+    0.0017908971568877108,
+    0.003589166473818828
+   ],
+   "agent_significantly_better": true,
+   "agent_minus_baseline_holdout": 0.0016113444032308522
+  },
+  "B1 FLAML（扩大预算 300s）": {
+   "agent_minus_baseline_oot_dev": -0.00017946816329872384,
+   "ci": [
+    -0.0011506347487183822,
+    0.0007958752961380152
+   ],
+   "agent_significantly_better": false,
+   "agent_minus_baseline_holdout": -0.0010080618237804373
+  }
+ }
+}

@@ -1,0 +1,72 @@
+# Lending Club 黑名单与字段使用策略
+# 数据层在加载时按本文件剔除字段；guardrail 用 leakage_patterns 检查新字段和 run_code 产出。
+# 标注 REVIEW 的条目是需要人工确认的判断。
+
+leakage:            # 贷后字段：任何模式下都剔除，agent 不可见
+  action: drop_at_load
+  fields:
+    - loan_status          # 仅用于生成 label，生成后从特征表剔除
+    - out_prncp
+    - out_prncp_inv
+    - total_pymnt
+    - total_pymnt_inv
+    - total_rec_prncp
+    - total_rec_int
+    - total_rec_late_fee
+    - recoveries
+    - collection_recovery_fee
+    - last_pymnt_d
+    - last_pymnt_amnt
+    - next_pymnt_d
+    - last_credit_pull_d
+    - last_fico_range_high
+    - last_fico_range_low
+    - pymnt_plan
+    - hardship_flag
+    - debt_settlement_flag
+  field_prefixes:          # 同一类的整组字段
+    - hardship_
+    - settlement_
+    - orig_projected_additional_accrued_interest
+    - deferral_term
+    - payment_plan_start_date
+
+  # 评估用途：在泄漏检测实验（§5.3 安全性指标、消融 A3）中，
+  # 这组字段会被"放回"数据中但不告诉 agent，用来测量 agent 的泄漏检出召回率。
+  eval_ground_truth: true
+
+incumbent_model:    # 在位模型输出
+  action: exclude_by_default     # REVIEW
+  fields: [grade, sub_grade, int_rate, installment]
+  rationale: >
+    这些字段是 Lending Club 自己的风险定价结果。使用它们，模型实际上在重新学习 LC 的模型，
+    无法衡量 agent 自己挖掘特征的能力。主实验默认排除，在消融 A7 中开启以量化差距。
+    在真实业务中，是否使用前一道模型的分数是一个策略问题（比如是否做二次评分）。
+
+compliance:
+  exclude:                       # REVIEW
+    - zip_code                   # 地理信息可能成为受保护特征的代理变量
+    - emp_title                  # 自由文本，可能包含代理信息
+  review:                        # 默认保留但在报告中标注；REVIEW
+    - addr_state
+
+unknown_availability:            # 进入 LEAK_SUSPECT，需人工确认后才能使用
+  - funded_amnt_inv
+
+meta:                            # 非特征
+  action: drop_at_load
+  fields: [id, member_id, url, desc, title, policy_code]
+
+leakage_patterns:
+  # 命名层面的泄漏气味规则（正则，不区分大小写）。
+  # 命中的新字段或 run_code 产出直接标记 LEAK_SUSPECT，由人确认。
+  - "pymnt"
+  - "^last_"
+  - "^next_"
+  - "recover"
+  - "settlement"
+  - "hardship"
+  - "rec_(prncp|int|late)"
+  - "out_prncp"
+  - "collection_recovery"
+  - "charge_?off"

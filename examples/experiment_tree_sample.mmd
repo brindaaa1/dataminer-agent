@@ -1,0 +1,22 @@
+flowchart TD
+  ROOT((start))
+  n_lc_kimi3_race_lgbm["lc_kimi3_race_lgbm<br/>RACE [low]<br/>AUC 0.6501<br/>PROMISING"]:::promising
+  n_lc_kimi3_race_lr_scorecard["lc_kimi3_race_lr_scorecard<br/>RACE [low]<br/>AUC 0.6421<br/>REJECT<br/>PLATEAU"]:::reject
+  n_lc_kimi3_e01["lc_kimi3_e01<br/>TUNE [low]<br/>AUC 0.6501 (+0.0000)<br/>PROMISING"]:::promising
+  n_lc_kimi3_e02["lc_kimi3_e02<br/>TUNE [low]<br/>AUC 0.6482 (-0.0019)<br/>PROMISING"]:::promising
+  n_lc_kimi3_e03["lc_kimi3_e03<br/>PROMOTE_FIDELITY [full]<br/>AUC 0.6718 (+0.0217)<br/>ACCEPT"]:::accept
+  n_lc_kimi3_e04["lc_kimi3_e04<br/>INVESTIGATE [none]<br/>NONE"]:::none
+  n_lc_kimi3_e05["lc_kimi3_e05<br/>TUNE [full]<br/>AUC 0.6720 (+0.0002)<br/>INCONCLUSIVE<br/>PLATEAU"]:::inconclusive
+  ROOT --> n_lc_kimi3_race_lgbm
+  ROOT --> n_lc_kimi3_race_lr_scorecard
+  n_lc_kimi3_race_lgbm --> n_lc_kimi3_e01
+  n_lc_kimi3_race_lgbm --> n_lc_kimi3_e02
+  n_lc_kimi3_race_lgbm --> n_lc_kimi3_e03
+  ROOT --> n_lc_kimi3_e04
+  n_lc_kimi3_e03 --> n_lc_kimi3_e05
+  classDef accept fill:#c8e6c9,stroke:#2e7d32
+  classDef reject fill:#ffcdd2,stroke:#c62828
+  classDef inconclusive fill:#fff9c4,stroke:#f9a825
+  classDef promising fill:#bbdefb,stroke:#1565c0
+  classDef none fill:#eeeeee,stroke:#757575
+  classDef accept_inv,reject_inv,inconclusive_inv,promising_inv,none_inv fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray:4 3

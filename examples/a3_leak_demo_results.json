@@ -1,0 +1,142 @@
+{
+ "n_leak_fields_present": 37,
+ "arms": {
+  "guardrail_on": {
+   "best_exp": "a3_guardrail_on_e03",
+   "oot_dev_auc": 0.6735415720616532,
+   "holdout_auc": 0.6786960048541251,
+   "holdout_auc_deploy_view": 0.6786960048541251,
+   "leak_features_in_final_model": [],
+   "quarantined": [
+    "total_pymnt",
+    "total_pymnt_inv",
+    "total_rec_prncp",
+    "recoveries",
+    "collection_recovery_fee",
+    "last_pymnt_amnt",
+    "last_fico_range_high",
+    "last_fico_range_low",
+    "pymnt_plan",
+    "out_prncp",
+    "out_prncp_inv",
+    "total_rec_int",
+    "total_rec_late_fee",
+    "last_pymnt_d",
+    "next_pymnt_d",
+    "last_credit_pull_d",
+    "hardship_flag",
+    "hardship_type",
+    "hardship_reason",
+    "hardship_status",
+    "deferral_term",
+    "hardship_amount",
+    "hardship_start_date",
+    "hardship_end_date",
+    "payment_plan_start_date",
+    "hardship_length",
+    "hardship_dpd",
+    "hardship_loan_status",
+    "orig_projected_additional_accrued_interest",
+    "hardship_payoff_balance_amount",
+    "hardship_last_payment_amount",
+    "debt_settlement_flag",
+    "settlement_status",
+    "settlement_date",
+    "settlement_amount",
+    "settlement_percentage",
+    "settlement_term"
+   ],
+   "stop_reason": "LLM_STOP: mock: 剩余方向期望价值低于成本"
+  },
+  "guardrail_off": {
+   "best_exp": "a3_guardrail_off_e01",
+   "oot_dev_auc": 0.9999342974473451,
+   "holdout_auc": 0.9998945158879242,
+   "holdout_auc_deploy_view": 0.503345953079257,
+   "leak_features_in_final_model": [
+    "collection_recovery_fee",
+    "debt_settlement_flag",
+    "deferral_term",
+    "hardship_amount",
+    "hardship_dpd",
+    "hardship_end_date",
+    "hardship_flag",
+    "hardship_last_payment_amount",
+    "hardship_length",
+    "hardship_loan_status",
+    "hardship_payoff_balance_amount",
+    "hardship_reason",
+    "hardship_start_date",
+    "hardship_status",
+    "hardship_type",
+    "last_credit_pull_d",
+    "last_fico_range_high",
+    "last_fico_range_low",
+    "last_pymnt_amnt",
+    "last_pymnt_d",
+    "next_pymnt_d",
+    "orig_projected_additional_accrued_interest",
+    "out_prncp",
+    "out_prncp_inv",
+    "payment_plan_start_date",
+    "pymnt_plan",
+    "recoveries",
+    "settlement_amount",
+    "settlement_date",
+    "settlement_percentage",
+    "settlement_status",
+    "settlement_term",
+    "total_pymnt",
+    "total_pymnt_inv",
+    "total_rec_int",
+    "total_rec_late_fee",
+    "total_rec_prncp"
+   ],
+   "quarantined": [],
+   "stop_reason": "LLM_STOP: mock: 剩余方向期望价值低于成本"
+  },
+  "clean_reference": {
+   "oot_dev_auc": 0.6735415720616532,
+   "holdout_auc": 0.6786960048541251,
+   "holdout_auc_deploy_view": 0.6786960048541251
+  }
+ },
+ "detection": {
+  "single_feature_auc>0.75（纯统计）": {
+   "recall": 0.21621621621621623,
+   "precision": 1.0,
+   "n_flagged": 8
+  },
+  "命名模式（leakage_patterns）": {
+   "recall": 0.918918918918919,
+   "precision": 1.0,
+   "n_flagged": 34
+  },
+  "可得时间标注（data_dictionary）": {
+   "recall": 1.0,
+   "precision": 1.0,
+   "n_flagged": 37
+  },
+  "三条规则合并（guardrail 实际行为）": {
+   "recall": 1.0,
+   "precision": 1.0,
+   "n_flagged": 37
+  },
+  "agent 实际隔离（guardrail_on 运行结果）": {
+   "recall": 1.0,
+   "precision": 1.0,
+   "n_flagged": 37
+  }
+ },
+ "missed_by_all_rules": [],
+ "top_single_feature_auc_of_leak_fields": {
+  "recoveries": 0.919,
+  "last_fico_range_high": 0.899,
+  "last_fico_range_low": 0.899,
+  "collection_recovery_fee": 0.867,
+  "total_rec_prncp": 0.828,
+  "last_pymnt_amnt": 0.768,
+  "total_pymnt": 0.756,
+  "total_pymnt_inv": 0.756
+ }
+}

@@ -1,0 +1,143 @@
+# 所有阈值集中在此，代码中不硬编码。
+paths:
+  knowhow_root: knowhow          # 仓库自带，见 knowhow/README.md
+  artifacts_root: artifacts      # 运行时产物（切分、模型、日志）；不提交到 git
+  reports_root: reports          # 运行时产物（模型卡、实验树）；不提交到 git
+
+# 数据集本体不随仓库分发，见 RUN.md 的下载说明；这里只声明放在哪。
+datasets:
+  lending_club:
+    tables:
+      main: "data_raw/lending_club/accepted_2007_to_2018Q4.csv"
+  hotel_bookings:
+    tables:
+      main: "data_raw/hotel_bookings/hotel_bookings.csv"
+  home_credit:
+    tables:
+      application_train: "data_raw/home_credit/application_train.csv"
+      bureau: "data_raw/home_credit/bureau.csv"
+      bureau_balance: "data_raw/home_credit/bureau_balance.csv"
+      previous_application: "data_raw/home_credit/previous_application.csv"
+      installments_payments: "data_raw/home_credit/installments_payments.csv"
+      POS_CASH_balance: "data_raw/home_credit/POS_CASH_balance.csv"
+      credit_card_balance: "data_raw/home_credit/credit_card_balance.csv"
+
+split:
+  valid_frac: 0.20
+  seed: 42
+
+# 任务规格：knowhow/<dataset>/ 里只有散文、无法结构化读取的部分（时间列的具体解析写法、行过滤条件）。
+# label、切分窗口、黑名单等结构化内容全部来自 knowhow/，不在这里重复。
+task_specs:
+  lending_club:
+    row_filter: "trim(term) = '36 months'"        # 呼应 data_dictionary.yaml 的 maturity_rule
+    split_time_expr: "strptime(issue_d, '%b-%Y')"
+    observation_time_expr: "strptime(issue_d, '%b-%Y')"
+    date_format: "%b-%Y"                          # data_dictionary 里 type: date 字段的格式
+    prior_aliases: {earliest_cr_line: credit_history_months}   # 预处理后 earliest_cr_line 就是"信用历史月数"
+    use_incumbent: false                          # 消融实验：改为 true 可评估"复用在位模型分数"的增量
+  hotel_bookings:
+    row_filter: "true"
+    split_time_expr: "strptime(arrival_date_year::varchar || '-' || arrival_date_month || '-' || arrival_date_day_of_month::varchar, '%Y-%B-%d')"
+    observation_time_expr: "strptime(arrival_date_year::varchar || '-' || arrival_date_month || '-' || arrival_date_day_of_month::varchar, '%Y-%B-%d') - to_days(lead_time)"
+    use_incumbent: false
+    csv_null_values: ["NA"]                       # children 列里的 NA 字符串
+    derived_expr_overrides:                       # know-how 里的伪 SQL 在 DuckDB 中的等价写法（不改 knowhow 文件）
+      booking_month: "month(arrival_date - to_days(lead_time::int))"
+    sql_aliases:                                  # classic_derived 表达式里用到的量（data_dictionary.observation_time 中的文字定义）
+      arrival_date: "CAST(strptime(arrival_date_year::varchar || '-' || arrival_date_month || '-' || arrival_date_day_of_month::varchar, '%Y-%B-%d') AS DATE)"
+  home_credit:
+    row_filter: "true"
+    unregistered_columns: application    # 主表一行 = 一次当前申请，未登记字段视为申请时字段（假设，写进模型卡风险提示）
+    pit_extra_filters:                    # pit_rules 中只有散文的部分，供 features/factory.py 使用
+      bureau: "(DAYS_ENDDATE_FACT IS NULL OR DAYS_ENDDATE_FACT <= 0)"
+    dev_sample_ids: 30000                # 开发期特征计算只用这么多申请人；最终结果再用全量
+
+thresholds:
+  maturity_current_share_max: 0.05    # 某月未完结状态占比超过则 DATA_FATAL 警告
+  missing_shift_report: 0.20          # train 与 oot_dev 缺失率相差超过此值，写入报告
+
+fidelity:
+  low:  {sample_frac: 0.10, n_trials: 20,  early_stopping_rounds: 20}
+  full: {sample_frac: 1.0,  n_trials: 100, early_stopping_rounds: 50}
+
+inner_loop:
+  n_threads: 8               # LightGBM 线程数；trial 串行，避免抢核
+  warm_start_max_frac: 0.10  # 初始点最多占 trial 总数的比例
+  pruner_startup_trials: 5
+  report_every: 50           # lgbm 每多少棵树向 pruner 汇报一次
+  cost_coef_sec: 1.0e-8      # 成本估算：秒 ≈ 系数 × 行数 × 特征数 × 树数×trial 数；随实测校准
+  n_rounds_max: 500          # lgbm 每个 trial 的最大树数
+
+evaluator:
+  gap_max: 0.03                # OVERFIT_GAP：valid AUC − OOT-dev AUC
+  leak_single_auc: 0.75        # LEAK_SUSPECT：单特征 AUC
+  psi_warn: 0.10
+  psi_severe: 0.25
+  psi_bins: 10
+  max_features: 60
+  bootstrap_n: 1000
+  bootstrap_seed: 0
+  no_progress_rounds: 3        # NO_PROGRESS：连续 N 轮 REJECT/INCONCLUSIVE
+  budget_low_frac: 0.15
+  plateau_ci_hint: true
+  early_stop_min_frac: 0.05    # NO_CONVERGE：最佳迭代数 < n_rounds_max × 该比例（几乎没学到东西）
+
+oot_budget:
+  alpha_0: 0.05
+  max_compares: 30             # K
+  policy: log                  # alpha_k = alpha_0 / (1 + ln k)
+
+final_gate:
+  delta: 0.02                  # holdout 比 OOT-dev 低超过此值 → 标注"疑似对 OOT-dev 过拟合"
+
+decide:
+  max_retries: 3               # LLM 输出校验失败后的重试次数
+  investigate_cap_per_branch: 2
+  topk: 3                      # 上下文中"最优 k 条 / 最近被拒 k 条"
+  policy_deviation_min_rationale_chars: 20
+
+run:
+  max_rounds: 12
+  budget: {tokens: 200000, cpu_minutes: 240, wall_minutes: 120}
+
+llm:
+  providers:                  # --llm <名字> 选择；key 只从环境变量（或 .env）读取，不写进本文件
+    anthropic: {type: anthropic, model: claude-sonnet-5, key_env: ANTHROPIC_API_KEY}
+    kimi:      {type: openai_compat, model: kimi-k3, base_url: "https://api.moonshot.cn/v1", key_env: MOONSHOT_API_KEY, fixed_temperature: 1, max_tokens: 8000}
+    deepseek:  {type: openai_compat, model: deepseek-chat, base_url: "https://api.deepseek.com/v1", key_env: DEEPSEEK_API_KEY}
+    # 不同账号能用的模型名不同；先用 client.models.list() 确认，再改这里。
+  model: claude-sonnet-5      # 兼容旧字段
+  max_tokens: 2000
+  decide_temperature: 0.0
+
+screen:                        # 筛选漏斗，顺序：缺失率 → IV → 单特征 AUC 报警 → 相关性去重 → PSI
+  missing_max: 0.95
+  iv_min: 0.02
+  corr_max: 0.9
+  psi_max: 0.25
+  iv_bins: 10
+
+report:
+  sanity_min_share: 0.01       # 特征方向与先验相反时，贡献占比低于此值不标"反直觉"（避免噪声）
+
+memory:
+  db: artifacts/memory.db      # 跨任务共享（不随 artifacts_root 变化）
+  max_distance: 2.0            # 指纹距离超过此值 → 视为不相似，冷启动（不复用 prior / lesson）
+  scales:                      # 指纹各维度的尺度（距离 = sqrt(sum(((a-b)/scale)^2))）；样本任务数少，无法用数据标准化，用固定尺度
+    log10_n_samples: 0.5
+    n_features: 20
+    bad_rate: 0.05
+    missing_rate: 0.10
+    time_span_months: 12
+  prior_top_k: 3               # 每个历史任务保留几组最优参数
+  confidence: {CANDIDATE: 0.3, VALIDATED: 0.6, ACTIVE: 0.9, DEPRECATED: 0.0}
+
+monotone:
+  disagree_min_abs_rho: 0.01     # 先验方向与 train 上特征-label 秩相关的符号相反、且 |rho| 不小于此值 → 跳过该约束（数据一致性守卫）
+  keep_if_psi_better: true       # 加约束后 AUC 没有显著变差、且分数 PSI 更优 → 保留约束（evaluator 的非劣效规则）
+  psi_margin: 0.002              # "PSI 更优"必须比基线低至少这么多；否则噪声级的差异会被当成收益
+
+run_code:
+  timeout_sec: 20
+  max_features: 5

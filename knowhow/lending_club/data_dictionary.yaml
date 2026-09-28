@@ -1,0 +1,133 @@
+# Lending Club 数据字典（know-how 标注版）
+# 数据源：Lending Club 2007–2018Q4 accepted loans（Kaggle 常见版本 accepted_2007_to_2018Q4.csv）
+# 字段名以实际下载的表头为准。加载时逐一校验，缺失的字段写入警告报告。
+#
+# availability 取值：
+#   application        借款人在申请时填写
+#   bureau_at_orig     放款时从征信拉取的快照
+#   loan_terms         放款时确定的合同条款
+#   incumbent_model    Lending Club 自有风控/定价模型的输出（放款时可得，但属于"在位模型"）
+#   post_origination   放款之后才产生或会被更新 → 泄漏
+#   meta               标识符、元数据，不作为特征
+#   unknown            可得时间不明确 → 列入 LEAK_SUSPECT 待审查
+#
+# 其他标记：
+#   compliance: exclude | review   合规敏感
+#   structural_missing_before      该字段在某个时间点之前整体缺失（会造成跨期漂移）
+
+dataset: lending_club
+entity_key: id
+observation_time_col: issue_d        # 放款月份，格式如 "Dec-2015"，需解析为日期
+
+label:
+  source_col: loan_status
+  definition: "36 期贷款在到期前是否发生 Charged Off 或 Default"
+  positive: ["Charged Off", "Default",
+             "Does not meet the credit policy. Status:Charged Off"]
+  negative: ["Fully Paid",
+             "Does not meet the credit policy. Status:Fully Paid"]
+  exclude: ["Current", "In Grace Period", "Late (16-30 days)", "Late (31-120 days)"]
+  maturity_rule: >
+    剔除仍在还款中的样本会引入选择偏差：越新的放款批次，其已结清的样本中早期违约占比越高，
+    导致坏样本率虚高。因此只使用表现期已基本完整的批次：
+    仅保留 term = 36 months 且 issue_d 在 2012-01 至 2015-12 之间的贷款（数据快照截至 2018-12）。
+    60 期贷款在该快照下成熟度不足，默认排除。
+    PROFILE 阶段需按放款月份统计 Current 占比；某月 Current 占比 > 5% 时发出 DATA_FATAL 警告。
+
+suggested_split:
+  filter: "term == '36 months' (去除前后空格) and '2012-01' <= issue_d <= '2015-12'"
+  train_valid: ["2012-01", "2014-12"]      # valid 从中按 20% 随机切出
+  oot_dev: ["2015-01", "2015-06"]
+  holdout: ["2015-07", "2015-12"]
+  note: 放款量逐年增长明显，2015 年样本量远大于 2012 年；分月 AUC 统计时需要注意样本量差异。
+
+fields:
+  # ---------- 合同条款 ----------
+  loan_amnt:          {availability: loan_terms, type: numeric}
+  term:               {availability: loan_terms, type: categorical, note: "主实验固定为 36 期，切分后为常量"}
+  funded_amnt:        {availability: loan_terms, type: numeric, note: "通常与 loan_amnt 高度相关"}
+  funded_amnt_inv:    {availability: unknown, type: numeric,
+                       note: "投资人认购金额，在挂牌后逐步形成，可能间接反映市场对风险的判断；默认列入审查"}
+  initial_list_status: {availability: loan_terms, type: categorical}
+  application_type:   {availability: application, type: categorical}
+
+  # ---------- 在位模型输出 ----------
+  grade:              {availability: incumbent_model, type: ordinal}
+  sub_grade:          {availability: incumbent_model, type: ordinal}
+  int_rate:           {availability: incumbent_model, type: numeric, note: "由 sub_grade 定价；原始数据可能是带 % 的字符串"}
+  installment:        {availability: incumbent_model, type: numeric,
+                       note: "由金额、利率、期限计算得出，间接包含 int_rate 信息"}
+
+  # ---------- 申请信息 ----------
+  emp_title:          {availability: application, type: text, compliance: exclude,
+                       note: "自由文本，基数极高；可能成为受保护特征的代理变量"}
+  emp_length:         {availability: application, type: ordinal, note: "'n/a' 与缺失需区分"}
+  home_ownership:     {availability: application, type: categorical, note: "OTHER/NONE/ANY 样本极少，合并处理"}
+  annual_inc:         {availability: application, type: numeric, note: "长尾分布，建议对数变换或分箱"}
+  verification_status: {availability: application, type: categorical}
+  purpose:            {availability: application, type: categorical}
+  title:              {availability: application, type: text, note: "与 purpose 高度冗余，默认不使用"}
+  desc:               {availability: meta, type: text, note: "早年才有，大量缺失"}
+  zip_code:           {availability: application, type: categorical, compliance: exclude,
+                       note: "只有前三位；地理信息可能成为受保护特征的代理变量（公平借贷风险）"}
+  addr_state:         {availability: application, type: categorical, compliance: review}
+  dti:                {availability: application, type: numeric, note: "存在极端值和负值，需要截断"}
+
+  # ---------- 放款时的征信快照 ----------
+  fico_range_low:     {availability: bureau_at_orig, type: numeric}
+  fico_range_high:    {availability: bureau_at_orig, type: numeric, note: "与 low 几乎完全相关，二选一或取均值"}
+  earliest_cr_line:   {availability: bureau_at_orig, type: date, note: "派生信用历史长度 = issue_d - earliest_cr_line"}
+  inq_last_6mths:     {availability: bureau_at_orig, type: numeric}
+  delinq_2yrs:        {availability: bureau_at_orig, type: numeric}
+  mths_since_last_delinq:  {availability: bureau_at_orig, type: numeric, note: "缺失表示从未逾期，不是随机缺失"}
+  mths_since_last_record:  {availability: bureau_at_orig, type: numeric, note: "缺失表示无公共记录"}
+  open_acc:           {availability: bureau_at_orig, type: numeric}
+  pub_rec:            {availability: bureau_at_orig, type: numeric}
+  pub_rec_bankruptcies: {availability: bureau_at_orig, type: numeric}
+  revol_bal:          {availability: bureau_at_orig, type: numeric}
+  revol_util:         {availability: bureau_at_orig, type: numeric, note: "原始数据可能是带 % 的字符串"}
+  total_acc:          {availability: bureau_at_orig, type: numeric}
+  acc_now_delinq:     {availability: bureau_at_orig, type: numeric}
+  tot_coll_amt:       {availability: bureau_at_orig, type: numeric}
+  tot_cur_bal:        {availability: bureau_at_orig, type: numeric}
+  total_rev_hi_lim:   {availability: bureau_at_orig, type: numeric}
+  collections_12_mths_ex_med: {availability: bureau_at_orig, type: numeric}
+
+  # 较晚才新增的征信字段：早期批次整体缺失，会造成跨期漂移
+  open_acc_6m:        {availability: bureau_at_orig, type: numeric, structural_missing_before: "2015-12"}
+  open_il_12m:        {availability: bureau_at_orig, type: numeric, structural_missing_before: "2015-12"}
+  il_util:            {availability: bureau_at_orig, type: numeric, structural_missing_before: "2015-12"}
+  all_util:           {availability: bureau_at_orig, type: numeric, structural_missing_before: "2015-12"}
+  inq_last_12m:       {availability: bureau_at_orig, type: numeric, structural_missing_before: "2015-12"}
+  # 注：上面的截止月份是近似值。PROFILE 阶段应按月统计缺失率，自动确定每个字段开始出现的月份，
+  # 并据此更新 structural_missing_before。在建议的切分下（2012–2015），这些字段基本不可用。
+
+  # ---------- 贷后字段（泄漏），同时列入 blacklist.yaml ----------
+  loan_status:        {availability: post_origination, role: label_source}
+  out_prncp:          {availability: post_origination}
+  out_prncp_inv:      {availability: post_origination}
+  total_pymnt:        {availability: post_origination}
+  total_pymnt_inv:    {availability: post_origination}
+  total_rec_prncp:    {availability: post_origination}
+  total_rec_int:      {availability: post_origination}
+  total_rec_late_fee: {availability: post_origination}
+  recoveries:         {availability: post_origination, note: "只有核销后才非零，几乎等同于 label"}
+  collection_recovery_fee: {availability: post_origination}
+  last_pymnt_d:       {availability: post_origination}
+  last_pymnt_amnt:    {availability: post_origination}
+  next_pymnt_d:       {availability: post_origination}
+  last_credit_pull_d: {availability: post_origination}
+  last_fico_range_high: {availability: post_origination, note: "贷后重新拉取的 FICO，违约者会明显下降"}
+  last_fico_range_low:  {availability: post_origination}
+  pymnt_plan:         {availability: post_origination}
+  hardship_flag:      {availability: post_origination}
+  debt_settlement_flag: {availability: post_origination}
+
+  # ---------- 元数据 ----------
+  id:                 {availability: meta}
+  member_id:          {availability: meta}
+  url:                {availability: meta}
+  policy_code:        {availability: meta}
+  issue_d:            {availability: meta, role: observation_time}
+
+# 未在本文件登记的字段一律视为 availability: unknown。

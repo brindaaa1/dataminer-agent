@@ -1,0 +1,154 @@
+# Home Credit Default Risk 数据字典（know-how 标注版）
+# 数据源：Kaggle Home Credit Default Risk。字段名以实际下载的表头为准，加载时逐一校验。
+#
+# 时间语义：所有 DAYS_* 字段都是"相对于本次申请日"的天数，负数表示申请之前；
+# MONTHS_BALANCE 是相对于申请日的月份，-1 表示申请前最近一个月。
+# 数据集没有绝对日期 → 无法做真正的时间切分 OOT，只能随机切分近似（在报告中注明）。
+
+dataset: home_credit
+entity_key: SK_ID_CURR
+label:
+  source_table: application_train
+  col: TARGET
+  definition: "1 = 客户在本次贷款的早期还款中出现逾期（数据集定义，细节未公开）"
+
+suggested_split:
+  method: stratified_random          # 没有绝对时间
+  train: 0.60
+  valid: 0.15
+  oot_dev: 0.10                      # 名义上的 OOT，实为随机切分
+  holdout: 0.15
+  caveat: "随机切分无法检验时间稳定性；PSI 类 guardrail 在此数据集上只能按伪时间维度（如 DAYS_DECISION 分桶）近似"
+
+pit_rules:
+  # 防御性过滤：理论上所有历史记录都在申请之前，但仍然强制执行
+  - "DAYS_* 类事件时间字段：只保留 <= 0 的记录"
+  - "MONTHS_BALANCE：只保留 <= -1 的记录"
+  - "DAYS_CREDIT_ENDDATE 可以 > 0：它表示合同约定的未来到期日，在申请时已知，可用"
+  - "DAYS_ENDDATE_FACT（实际结清日）必须 <= 0，否则丢弃该记录"
+  - "时间窗口特征一律以 DAYS_* / MONTHS_BALANCE 为基准，例如近 90 天 = DAYS_X >= -90"
+
+sentinel_values:
+  - {value: 365243, fields: [DAYS_EMPLOYED], meaning: "无工作/退休人员的占位值，需转为缺失并单独生成一个标志位"}
+  - {value: 365243, fields: [DAYS_FIRST_DRAWING, DAYS_FIRST_DUE, DAYS_LAST_DUE_1ST_VERSION, DAYS_LAST_DUE, DAYS_TERMINATION],
+     table: previous_application, meaning: "占位值，转为缺失"}
+  - {value: "XNA", fields: [CODE_GENDER, ORGANIZATION_TYPE, NAME_CONTRACT_TYPE], meaning: "未知类别"}
+
+tables:
+  application_train:
+    grain: 一行 = 一次当前申请
+    key: SK_ID_CURR
+    key_fields:
+      AMT_INCOME_TOTAL:   {type: numeric, note: "极端值，建议对数变换"}
+      AMT_CREDIT:         {type: numeric}
+      AMT_ANNUITY:        {type: numeric}
+      AMT_GOODS_PRICE:    {type: numeric}
+      DAYS_BIRTH:         {type: numeric, compliance: review, note: "年龄；在部分司法辖区属于敏感特征"}
+      DAYS_EMPLOYED:      {type: numeric, note: "含 365243 占位值"}
+      EXT_SOURCE_1:       {type: numeric, availability: incumbent_model, note: "外部评分，信息量极强"}
+      EXT_SOURCE_2:       {type: numeric, availability: incumbent_model}
+      EXT_SOURCE_3:       {type: numeric, availability: incumbent_model}
+      CODE_GENDER:        {type: categorical, compliance: exclude}
+      NAME_CONTRACT_TYPE: {type: categorical}
+      NAME_INCOME_TYPE:   {type: categorical}
+      NAME_EDUCATION_TYPE: {type: categorical}
+      NAME_FAMILY_STATUS: {type: categorical, compliance: review}
+      ORGANIZATION_TYPE:  {type: categorical, note: "高基数"}
+    classic_derived:      # 广为使用的比例特征，作为派生特征的起点
+      - "credit_income_ratio = AMT_CREDIT / AMT_INCOME_TOTAL"
+      - "annuity_income_ratio = AMT_ANNUITY / AMT_INCOME_TOTAL"
+      - "credit_term = AMT_CREDIT / AMT_ANNUITY"
+      - "credit_goods_ratio = AMT_CREDIT / AMT_GOODS_PRICE"
+      - "employed_age_ratio = DAYS_EMPLOYED / DAYS_BIRTH"
+
+  bureau:
+    grain: 一行 = 客户在其他机构的一笔历史贷款（征信记录）
+    key: SK_ID_BUREAU
+    parent: {table: application_train, on: SK_ID_CURR}
+    time_field: DAYS_CREDIT
+    key_fields:
+      CREDIT_ACTIVE:        {type: categorical, values: [Active, Closed, Sold, Bad debt]}
+      CREDIT_TYPE:          {type: categorical}
+      DAYS_CREDIT:          {type: numeric, note: "开户时间，相对申请日"}
+      DAYS_CREDIT_ENDDATE:  {type: numeric, note: "约定到期日，可以 > 0"}
+      DAYS_ENDDATE_FACT:    {type: numeric, note: "实际结清日"}
+      CREDIT_DAY_OVERDUE:   {type: numeric}
+      AMT_CREDIT_SUM:       {type: numeric}
+      AMT_CREDIT_SUM_DEBT:  {type: numeric}
+      AMT_CREDIT_SUM_LIMIT: {type: numeric}
+      AMT_CREDIT_SUM_OVERDUE: {type: numeric}
+      DAYS_CREDIT_UPDATE:   {type: numeric}
+
+  bureau_balance:
+    grain: 一行 = 一笔征信贷款的一个月
+    key: [SK_ID_BUREAU, MONTHS_BALANCE]
+    parent: {table: bureau, on: SK_ID_BUREAU}
+    time_field: MONTHS_BALANCE
+    key_fields:
+      STATUS: {type: categorical, note: "0 = 无逾期；1–5 = 逾期档位（逾期天数递增）；C = 已结清；X = 未知"}
+    aggregation_path: "bureau_balance → bureau（按 SK_ID_BUREAU）→ application（按 SK_ID_CURR），两级聚合"
+
+  previous_application:
+    grain: 一行 = 客户在 Home Credit 的一次历史申请
+    key: SK_ID_PREV
+    parent: {table: application_train, on: SK_ID_CURR}
+    time_field: DAYS_DECISION
+    key_fields:
+      NAME_CONTRACT_STATUS: {type: categorical, values: [Approved, Refused, Canceled, Unused offer]}
+      AMT_APPLICATION:      {type: numeric, note: "申请金额"}
+      AMT_CREDIT:           {type: numeric, note: "最终批准金额"}
+      DAYS_DECISION:        {type: numeric}
+      CODE_REJECT_REASON:   {type: categorical}
+      NAME_CONTRACT_TYPE:   {type: categorical}
+      CNT_PAYMENT:          {type: numeric}
+
+  installments_payments:
+    grain: 一行 = 历史贷款的一期还款
+    parent: {table: previous_application, on: SK_ID_PREV}
+    also_has: SK_ID_CURR
+    time_field: DAYS_INSTALMENT
+    key_fields:
+      NUM_INSTALMENT_NUMBER: {type: numeric}
+      DAYS_INSTALMENT:       {type: numeric, note: "应还日"}
+      DAYS_ENTRY_PAYMENT:    {type: numeric, note: "实还日"}
+      AMT_INSTALMENT:        {type: numeric, note: "应还金额"}
+      AMT_PAYMENT:           {type: numeric, note: "实还金额"}
+    classic_derived:
+      - "days_late = DAYS_ENTRY_PAYMENT - DAYS_INSTALMENT（> 0 为逾期）"
+      - "pay_ratio = AMT_PAYMENT / AMT_INSTALMENT（< 1 为少还）"
+
+  POS_CASH_balance:
+    grain: 一行 = 一笔 POS/现金贷的一个月
+    parent: {table: previous_application, on: SK_ID_PREV}
+    also_has: SK_ID_CURR
+    time_field: MONTHS_BALANCE
+    key_fields:
+      SK_DPD:               {type: numeric, note: "逾期天数"}
+      SK_DPD_DEF:           {type: numeric, note: "剔除小额容忍后的逾期天数"}
+      CNT_INSTALMENT_FUTURE: {type: numeric}
+      NAME_CONTRACT_STATUS: {type: categorical}
+
+  credit_card_balance:
+    grain: 一行 = 一张信用卡的一个月
+    parent: {table: previous_application, on: SK_ID_PREV}
+    also_has: SK_ID_CURR
+    time_field: MONTHS_BALANCE
+    key_fields:
+      AMT_BALANCE:             {type: numeric}
+      AMT_CREDIT_LIMIT_ACTUAL: {type: numeric}
+      AMT_DRAWINGS_CURRENT:    {type: numeric}
+      AMT_PAYMENT_CURRENT:     {type: numeric}
+      AMT_INST_MIN_REGULARITY: {type: numeric, note: "最低还款额"}
+      SK_DPD:                  {type: numeric}
+    classic_derived:
+      - "utilization = AMT_BALANCE / AMT_CREDIT_LIMIT_ACTUAL"
+      - "min_pay_coverage = AMT_PAYMENT_CURRENT / AMT_INST_MIN_REGULARITY"
+
+blacklist:
+  compliance_exclude: [CODE_GENDER]                  # REVIEW
+  compliance_review: [DAYS_BIRTH, NAME_FAMILY_STATUS] # REVIEW
+  incumbent_model: [EXT_SOURCE_1, EXT_SOURCE_2, EXT_SOURCE_3]
+  incumbent_policy: include_by_default               # REVIEW：与 Lending Club 不同，见下
+  incumbent_rationale: >
+    EXT_SOURCE 是外部数据源评分，在真实业务中通常作为合法输入使用（类似征信分）。
+    因此默认保留，但在报告中单独列出它们的贡献度；消融 A7 同样适用。

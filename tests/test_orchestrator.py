@@ -213,3 +213,36 @@ def test_context_exposes_tunable_params(toy_cfg):
     t = seen["ctx"]["tunable"]
     assert "learning_rate" in t and "max_depth" not in t and t["learning_rate"]["low"] < t["learning_rate"]["high"]
     assert seen["ctx"]["fidelity_options"]["low"]["n_trials"] == 3
+
+
+def test_no_final_model_nudges_promotion(toy_cfg):
+    """还没有全保真度最优模型、又有 PROMISING 的低保真实验时：上下文写明规则，策略先验指向 PROMOTE_FIDELITY，
+    不写理由就换别的动作会被校验拒绝；升保真度后有了最终模型，这个诊断码消失。"""
+    base = dict(hypothesis="h", expected_gain="g", est_cost={})
+    tune_short = dict(base, action="TUNE", params={"space": {"learning_rate": {"low": 0.02, "high": 0.1, "log": True}}}, rationale="调参")
+    ctxs = []
+
+    def script(user):
+        if '"mode": "DECIDE"' not in user:
+            return {"directions": []} if '"mode": "PLAN"' in user else {"lessons": []}
+        ctx = json.loads(user.split("```json")[1].split("```")[0])
+        ctxs.append(ctx)
+        if len(ctxs) == 1:
+            return tune_short                                             # 偏离先验且理由太短 → 拒绝
+        if not ctx["final_model"]["exists"]:
+            return dict(base, action="PROMOTE_FIDELITY", params={"exp_id": ctx["final_model"]["promotable"][0]["exp_id"]}, rationale="r" * 30)
+        return dict(base, action="STOP", params={"reason": "done"}, rationale="r" * 30)
+
+    o = build(toy_cfg, ScriptedLLM(script))
+    assert o.run() == State.DONE
+    first = ctxs[0]
+    assert first["final_model"]["exists"] is False
+    cands = {c["exp_id"]: c for c in first["final_model"]["promotable"]}
+    races = {r.exp_id: r for r in o.store.all("t1") if r.action_type == "RACE"}
+    assert set(cands) == {e for e, r in races.items() if r.verdict in ("PROMISING", "INCONCLUSIVE")}   # 不确定的赛跑模型也可升
+    assert all(c["gap"] is not None and c["oot_dev_auc"] for c in cands.values())
+    assert "NO_FINAL_MODEL" in first["diagnosis"]["codes"] and "PROMOTE_FIDELITY" in first["diagnosis"]["policy_prior"]["NO_FINAL_MODEL"]
+    rej = o.events.query("decision_rejected")
+    assert rej and "偏离策略先验" in rej[0]["payload"]["errors"][0] and "PROMOTE_FIDELITY" in rej[0]["payload"]["errors"][0]
+    assert o.p["best_exp_id"] and o.p["final"]                            # 升保真度后被接受，有最终模型
+    assert "NO_FINAL_MODEL" not in ctxs[-1]["diagnosis"]["codes"] and ctxs[-1]["final_model"]["exists"]

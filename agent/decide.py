@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from agent.actions import ActionError, apply_action, config_hash
 from agent.llm import extract_json
 from agent.schemas import ActionType, Decision
-from evaluation.guardrails import POLICY_PRIOR
+from evaluation.guardrails import POLICY_PRIOR, decision_codes
 from tools.run_experiment import estimate_cost_minutes
 
 SYSTEM = (Path(__file__).parent / "prompts" / "decide.md").read_text()
@@ -62,7 +62,7 @@ class Validator:
         if a == "INVESTIGATE":
             if self.p["investigate_counts"].get(str(self.p["current_node"]), 0) >= self.cfg["decide"]["investigate_cap_per_branch"]:
                 errs.append("该分支的 INVESTIGATE 次数已达上限，请换动作")
-        prior = {x for c in self.p.get("last_codes", []) for x in POLICY_PRIOR.get(c, [])}
+        prior = {x for c in decision_codes(self.p, list(recs.values())) for x in POLICY_PRIOR.get(c, [])}
         if prior and a not in prior and len(d.rationale.strip()) < self.cfg["decide"]["policy_deviation_min_rationale_chars"]:
             errs.append(f"偏离策略先验 {sorted(prior)} 时，rationale 必须写明理由")
         return errs

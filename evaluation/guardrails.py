@@ -88,4 +88,31 @@ POLICY_PRIOR = {
     "BUDGET_LOW": ["PROMOTE_FIDELITY", "STOP"],
     "DATA_FATAL": ["ESCALATE_HUMAN"],
     "OOM": ["TUNE", "SWITCH_MODEL"],
+    "NO_FINAL_MODEL": ["PROMOTE_FIDELITY"],
 }
+
+
+def promotable(recs) -> list[dict]:
+    """可以升到全量复验的低保真实验（含模型赛跑）：没被 guardrail 拒掉（PROMISING 或 INCONCLUSIVE）、没失效、没升过。
+    INCONCLUSIVE 也算：模型赛跑里 AUC 略低但更稳的模型（如评分卡）常被判不确定，只收 PROMISING 会把它们排除在外，
+    最终模型就只能在同一个模型上打转（hotel_deepseek2：lightgbm 三次全量复验都被 OVERFIT_GAP 拒）。
+    每条带上 OOT-dev AUC 和 gap（valid − OOT-dev），让 LLM 同时看到效果和稳定性。"""
+    done = {r.diff.get("exp_id") for r in recs if r.action_type == "PROMOTE_FIDELITY"}
+    out = []
+    for r in recs:
+        if r.fidelity == "low" and r.verdict in ("PROMISING", "INCONCLUSIVE") and not r.invalidated and r.exp_id not in done:
+            m = r.metrics
+            out.append({"exp_id": r.exp_id, "model": r.config.get("model"), "verdict": r.verdict,
+                        "oot_dev_auc": round(m["oot_dev_auc"], 4) if "oot_dev_auc" in m else None,
+                        "gap": round(m["valid_auc"] - m["oot_dev_auc"], 4) if {"valid_auc", "oot_dev_auc"} <= m.keys() else None})
+    return out
+
+
+def decision_codes(p: dict, recs) -> list[str]:
+    """DECIDE 看到的诊断码 = 上一个实验的诊断 + 任务级状态。
+    NO_FINAL_MODEL：还没有全保真度的最优模型，但已有可升级的低保真实验。只有全保真度实验能被 ACCEPT，
+    不升保真度就不会有最终模型（hotel_deepseek1 连跑 5 轮低保真调参，最后没有模型）。上下文和校验都用这个函数，保证一致。"""
+    codes = list(p.get("last_codes", []))
+    if not p.get("best_exp_id") and promotable(recs):
+        codes.append("NO_FINAL_MODEL")
+    return codes

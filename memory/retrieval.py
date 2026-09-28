@@ -1,5 +1,5 @@
 """结构化查询组装 DECIDE 上下文（§4.13）：不用滑动窗口，按当前分支路径、全局最优、最近被拒来查。"""
-from evaluation.guardrails import POLICY_PRIOR
+from evaluation.guardrails import POLICY_PRIOR, decision_codes, promotable
 from modeling.zoo import ZOO
 
 
@@ -14,8 +14,8 @@ def build_context(store, p: dict, cfg: dict, spec, oot_budget, remaining: dict, 
     k = cfg["decide"]["topk"]
     tid = p["task_id"]
     recs = {r.exp_id: r for r in store.all(tid)}
-    last_codes = p.get("last_codes", [])
-    prior = {c: POLICY_PRIOR[c] for c in last_codes if c in POLICY_PRIOR}
+    codes = decision_codes(p, list(recs.values()))
+    prior = {c: POLICY_PRIOR[c] for c in codes if c in POLICY_PRIOR}
     node = recs.get(p["current_node"])
     return {
         "mode": "DECIDE",
@@ -31,7 +31,12 @@ def build_context(store, p: dict, cfg: dict, spec, oot_budget, remaining: dict, 
         "recent_rejected": [_line(r) for r in store.recent_rejected(tid, k)],
         "race": [_line(recs[e]) for e in p["race"] if e in recs],
         "promoted": [r.diff.get("exp_id") for r in recs.values() if r.action_type == "PROMOTE_FIDELITY"],
-        "diagnosis": {"codes": last_codes, "policy_prior": prior},
+        "diagnosis": {"codes": codes, "policy_prior": prior},
+        # 最终模型只能来自全保真度实验；把这条规则和当前状态直接写出来，不让 LLM 自己从 best/promoted 推断
+        "final_model": {"exists": bool(p["best_exp_id"]), "promotable": promotable(list(recs.values())),
+                        "rounds_left": cfg["run"]["max_rounds"] - p["round_no"],
+                        "rule": "只有全保真度（full）实验能被 ACCEPT 成为最终模型；PROMOTE_FIDELITY 把 promotable 里的低保真实验在全量数据上复验。"
+                                "全量复验同样要过 OVERFIT_GAP（gap = valid − OOT-dev 超过阈值即拒），选谁时要同时看 AUC 和 gap"},
         "unhandled_leaks": p["pending_leaks"],
         "oot_dev": {"used": oot_budget.used, "max": oot_budget.K, "next_alpha": round(oot_budget.current_alpha(), 4)},
         "taboo_count": len(store.taboo_hashes(tid)),

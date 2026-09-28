@@ -5,8 +5,9 @@ import time
 
 
 class EventLog:
-    def __init__(self, db_path: str, task_id: str):
-        self.db, self.task_id = sqlite3.connect(db_path), task_id
+    def __init__(self, db_path: str, task_id: str, listener=None):
+        """listener(type_, payload, exp_id)：每写一条事件就回调一次（Langfuse 上报用），不影响写库。"""
+        self.db, self.task_id, self.listener = sqlite3.connect(db_path), task_id, listener
         self.db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, ts REAL,"
                         " type TEXT, exp_id TEXT, payload TEXT)")
         self.db.commit()
@@ -15,6 +16,8 @@ class EventLog:
         cur = self.db.execute("INSERT INTO events (task_id, ts, type, exp_id, payload) VALUES (?,?,?,?,?)",
                               (self.task_id, time.time(), type_, exp_id, json.dumps(payload or {}, default=str, ensure_ascii=False)))
         self.db.commit()
+        if self.listener:
+            self.listener(type_, payload or {}, exp_id)
         return cur.lastrowid
 
     def query(self, type_: str | None = None, exp_id: str | None = None) -> list[dict]:

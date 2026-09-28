@@ -1,7 +1,9 @@
 """LLM 接口。complete() 返回 (文本, token 数)。真实模型从环境变量 ANTHROPIC_API_KEY 读取 key。"""
+import contextlib
 import json
 import os
 import re
+import time
 
 from runtime.env import load_env
 
@@ -18,9 +20,9 @@ def last_json_block(text: str) -> dict:
 
 
 class AnthropicLLM:
-    def __init__(self, model: str, max_tokens: int = 2000):
+    def __init__(self, model: str, max_tokens: int = 2000, api_key: str | None = None):
         import anthropic
-        self.client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        self.client = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
         self.model, self.max_tokens = model, max_tokens
 
     def complete(self, system: str, user: str, temperature: float = 0.0):
@@ -33,10 +35,10 @@ class OpenAICompatLLM:
     """OpenAI 兼容接口（Kimi/Moonshot、DeepSeek 等）。key 从环境变量 key_env 读取。"""
 
     def __init__(self, model: str, base_url: str, key_env: str, max_tokens: int = 2000, client=None,
-                 fixed_temperature: float | None = None):
+                 fixed_temperature: float | None = None, api_key: str | None = None):
         if client is None:
             import openai
-            key = os.environ.get(key_env)
+            key = api_key or os.environ.get(key_env)
             if not key:
                 raise RuntimeError(f"环境变量 {key_env} 未设置：请在启动前 export {key_env}=...")
             client = openai.OpenAI(api_key=key, base_url=base_url)
@@ -50,16 +52,52 @@ class OpenAICompatLLM:
         return r.choices[0].message.content or "", (r.usage.total_tokens if r.usage else 0)
 
 
-def make_llm(provider: str, cfg: dict):
-    """provider: mock | anthropic | kimi | deepseek …（config.yaml 的 llm.providers 里登记）。"""
+def redact(msg: str) -> str:
+    """服务商报错里可能带 key 或 access key 片段（如 sk-…、ak-…），写日志、上页面之前抹掉。"""
+    return re.sub(r"\b((?:sk|ak)-)[A-Za-z0-9*_\-]+", r"\1***", msg)
+
+
+class TracedLLM:
+    """包一层：每次 complete() 写一条 llm_call 事件（阶段、耗时、token、prompt/回复原文）。失败也记录，再原样抛出。
+    stage() 返回调用时所处的状态机状态，用来区分 PLAN / DECIDE / REPORT / CONSOLIDATE。"""
+
+    def __init__(self, inner, emit, stage=lambda: None, tracer=None):
+        self.inner, self.emit, self.stage, self.tracer = inner, emit, stage, tracer
+
+    def complete(self, system, user, temperature=0.0):
+        t0 = time.time()
+        rec = {"stage": self.stage(), "model": getattr(self.inner, "model", type(self.inner).__name__),
+               "temperature": temperature, "system_chars": len(system), "prompt": user}
+        g = self.tracer.generation(rec["stage"], rec["model"], user, temperature) if self.tracer else contextlib.nullcontext()
+        with g as gen:
+            try:
+                text, toks = self.inner.complete(system, user, temperature)
+            except Exception as e:
+                err = redact(f"{type(e).__name__}: {str(e)[:300]}")
+                self.emit("llm_call", {**rec, "latency_s": round(time.time() - t0, 3), "tokens": 0, "error": err})
+                if self.tracer:
+                    self.tracer.end_generation(gen, error=err)
+                raise
+            self.emit("llm_call", {**rec, "latency_s": round(time.time() - t0, 3), "tokens": toks, "response": text})
+            if self.tracer:
+                self.tracer.end_generation(gen, text, toks)
+        return text, toks
+
+    def __getattr__(self, name):                 # 其余属性（如 ScriptedLLM.calls）透传给被包装的对象
+        return getattr(self.inner, name)
+
+
+def make_llm(provider: str, cfg: dict, api_key: str | None = None):
+    """provider: mock | anthropic | kimi | deepseek …（config.yaml 的 llm.providers 里登记）。
+    api_key 不给时从环境变量读取；给了就只交给客户端，不写进环境变量（app.py 里用户临时填的 key 走这条路）。"""
     load_env()                                   # 项目根目录的 .env
     if provider == "mock":
         return PolicyMockLLM()
     p = cfg["llm"]["providers"][provider]
     if p["type"] == "anthropic":
-        return AnthropicLLM(p["model"], cfg["llm"]["max_tokens"])
+        return AnthropicLLM(p["model"], cfg["llm"]["max_tokens"], api_key=api_key)
     return OpenAICompatLLM(p["model"], p["base_url"], p["key_env"], p.get("max_tokens", cfg["llm"]["max_tokens"]),
-                           fixed_temperature=p.get("fixed_temperature"))
+                           fixed_temperature=p.get("fixed_temperature"), api_key=api_key)
 
 
 class ScriptedLLM:

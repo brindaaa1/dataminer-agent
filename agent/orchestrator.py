@@ -12,7 +12,7 @@ from report.model_card import build_report
 
 from agent.actions import allowed_models, apply_action, config_hash
 from agent.decide import DecideFailed, Validator, decide
-from agent.llm import extract_json
+from agent.llm import TracedLLM, extract_json
 from agent.schemas import Plan, TaskSpec
 from agent.states import State as S, TRANSITIONS, TERMINAL, legal
 from data.access import DataAccess
@@ -27,6 +27,7 @@ from memory.store import MemoryStore, Store
 from runtime import budget as bud
 from runtime.checkpoint import Checkpoint
 from runtime.events import EventLog
+from runtime.tracing import NoopTracer
 from tools.query_data import investigate
 from tools.run_experiment import run_experiment
 
@@ -36,13 +37,16 @@ META = ("_row_id", "_label", "_split_time", "_obs_time")
 
 
 class Orchestrator:
-    def __init__(self, spec: TaskSpec, cfg: dict, llm, final_gate, task_id: str, crash_hook=None):
+    def __init__(self, spec: TaskSpec, cfg: dict, llm, final_gate, task_id: str, crash_hook=None, tracer=None):
+        """tracer：可选的 Langfuse 上报（runtime/tracing.py）；默认不上报。"""
         self.cfg, self.llm, self.final_gate, self.crash_hook = cfg, llm, final_gate, crash_hook
+        self.tracer = tracer or NoopTracer()
         art = Path(cfg["paths"]["artifacts_root"])
         art.mkdir(parents=True, exist_ok=True)
         self.art, db = art, str(art / "state.db")
         self.task_id = task_id
-        self.events, self.ckpt, self.store = EventLog(db, task_id), Checkpoint(db, task_id), Store(db)
+        self.events, self.ckpt, self.store = EventLog(db, task_id, self.tracer.on_event), Checkpoint(db, task_id), Store(db)
+        self.llm = TracedLLM(llm, self.events.append, lambda: self.state.value, self.tracer)
         self.evaluator_db = db
         self.mem = MemoryStore(cfg["memory"]["db"])
         saved = self.ckpt.load()
@@ -68,13 +72,21 @@ class Orchestrator:
 
     def step(self):
         t0 = time.time()
-        nxt = getattr(self, f"_{self.state.value.lower()}")()
-        assert legal(self.state, nxt), f"非法转换 {self.state} → {nxt}"
-        if self.crash_hook:
-            self.crash_hook(self.state.value)              # 测试用：模拟在状态中途被打断（工作做完、检查点未写）
+        self.tracer.begin_state(self.state.value)
+        try:
+            nxt = getattr(self, f"_{self.state.value.lower()}")()
+            assert legal(self.state, nxt), f"非法转换 {self.state} → {nxt}"
+            if self.crash_hook:
+                self.crash_hook(self.state.value)          # 测试用：模拟在状态中途被打断（工作做完、检查点未写）
+        except BaseException as e:
+            self.tracer.finish(self.state.value, error=f"{type(e).__name__}: {str(e)[:300]}")
+            raise
         eid = self.events.append("state_transition", {"from": self.state.value, "to": nxt.value, "sec": round(time.time() - t0, 2)})
         self.state = nxt
         self.ckpt.save(self.state.value, self.p, eid)
+        if nxt in TERMINAL or nxt == S.AWAIT_HUMAN:
+            self.tracer.finish(nxt.value, {"best_exp_id": self.p["best_exp_id"], "stop_reason": self.p["stop_reason"],
+                                           "final": self.p["final"]})
 
     # ---------- 辅助 ----------
     @property
@@ -274,6 +286,14 @@ class Orchestrator:
         out["verdict"] = getattr(v, "value", v)
         out["codes"] = out["diagnosis_codes"]
         out["leaks"] = out.get("diagnosis_details", {}).get("LEAK_SUSPECT", {})
+        m, cmp = res.get("metrics", {}), out.get("compare")
+        self.events.append("evaluated", {"verdict": out["verdict"], "codes": out["codes"],
+                                         "guardrail_failures": out.get("guardrail_failures", []),
+                                         "model": res["config"].get("model"), "fidelity": res["config"].get("fidelity"),
+                                         "metrics": {k: m.get(k) for k in ("valid_auc", "oot_dev_auc", "score_psi")},
+                                         "baseline": base_result["exp_id"] if base_result else None,
+                                         "compare": {k: cmp.get(k) for k in ("delta", "ci_low", "ci_high", "alpha", "significant", "k")} if cmp else None},
+                           exp_id=res.get("exp_id"))
         return out
 
     def _decide(self):
@@ -308,6 +328,7 @@ class Orchestrator:
         p["pending"] = {"decision": d.model_dump(mode="json"), "kind": kind, "config": new_cfg, "parent": parent, "exp_id": exp_id}
         if kind == "stop":
             p["stop_reason"] = "LLM_STOP: " + str(d.params.get("reason", ""))
+            self.events.append("stop", {"reason": p["stop_reason"]})
             p["pending"] = None
             return S.FINAL_GATE
         if kind == "escalate":
@@ -402,6 +423,7 @@ class Orchestrator:
         p = self.p
         if p["best_exp_id"]:
             p["final"] = self.final_gate.run_once(self._result(p["best_exp_id"]))
+            self.events.append("final_gate", p["final"], exp_id=p["best_exp_id"])
         else:
             p["final"] = None
             self.events.append("final_gate_skipped", {"why": "没有通过 evaluator 的全保真度实验"})

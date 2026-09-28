@@ -1,0 +1,1625 @@
+{
+ "task_id": "lc_kimi1",
+ "note": "Kimi 在 Lending Club 全量数据上的真实运行。早期日志：没有 llm_call / evaluated 事件，指标取自实验记录，也看不到 prompt 原文。",
+ "meta": {
+  "dataset": "Lending Club（36 期贷款，全量，数据不随仓库分发）",
+  "llm": "Kimi（kimi-k3）",
+  "has_sample_data": false,
+  "settings": "最多 5 轮决策"
+ },
+ "events": [
+  {
+   "id": 128,
+   "ts": 1790390283.453511,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "INTAKE",
+    "to": "PROFILE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 129,
+   "ts": 1790390283.609379,
+   "type": "profile",
+   "exp_id": null,
+   "payload": {
+    "n_train": 245170,
+    "bad_rate": 0.13265489252355508,
+    "n_features": 35,
+    "missing_rate": 0.19022602392508986
+   }
+  },
+  {
+   "id": 130,
+   "ts": 1790390283.61428,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "PROFILE",
+    "to": "PLAN",
+    "sec": 0.16
+   }
+  },
+  {
+   "id": 131,
+   "ts": 1790390395.9157,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "PLAN",
+    "to": "DECIDE",
+    "sec": 112.3
+   }
+  },
+  {
+   "id": 132,
+   "ts": 1790390450.993981,
+   "type": "decision_rejected",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "errors": [
+     "参数 max_depth 不在 lgbm 的搜索空间中，可选：['learning_rate', 'num_leaves', 'min_child_samples', 'feature_fraction', 'bagging_fraction', 'lambda_l2']"
+    ]
+   }
+  },
+  {
+   "id": 133,
+   "ts": 1790390476.984149,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 1,
+    "decision": {
+     "action": "TUNE",
+     "params": {
+      "space": {
+       "learning_rate": {
+        "low": 0.01,
+        "high": 0.2,
+        "log": true
+       },
+       "num_leaves": {
+        "low": 15,
+        "high": 127,
+        "log": false,
+        "type": "int"
+       },
+       "min_child_samples": {
+        "low": 20,
+        "high": 200,
+        "log": false,
+        "type": "int"
+       },
+       "feature_fraction": {
+        "low": 0.5,
+        "high": 1.0,
+        "log": false
+       },
+       "bagging_fraction": {
+        "low": 0.5,
+        "high": 1.0,
+        "log": false
+       },
+       "lambda_l2": {
+        "low": 0.001,
+        "high": 10.0,
+        "log": true
+       }
+      },
+      "n_trials": 20,
+      "fidelity": "low"
+     },
+     "hypothesis": "在已固化的 term=36 样本与泄漏清洗口径上，对 LightGBM 做小规模超参搜索（学习率/叶子数/子样本数/行列采样/L2）可在当前 0.6501 的 OOT-dev AUC 上获得稳健提升，且不显著扩大 train-OOT gap",
+     "expected_gain": "OOT-dev AUC +0.005~0.015，为五个方向中单项期望增益最高者",
+     "est_cost": {
+      "tokens": 8000.0,
+      "cpu_minutes": 30.0
+     },
+     "alternatives_considered": [
+      "PROMOTE_FIDELITY：当前仅有默认参数的低保真结果，先升保真会浪费预算在未调参的配置上，顺序不合理",
+      "SWITCH_MODEL：可用模型仅 lgbm 与 lr_scorecard，后者已 REJECT(PLATEAU)，无可切换对象",
+      "INVESTIGATE(single_feature_auc)：有助于特征剪枝，但当前增益优先级低于 GBDT 调参，可后置"
+     ],
+     "rationale": "diagnosis 为空、policy_prior 无候选动作，按 directions 中期望收益最高的 GBDT 调参方向执行；修正上轮错误：搜索空间仅使用 lgbm 允许的 6 个参数键，移除了不在空间内的 max_depth；保持 low fidelity 以控制成本，留待后续 PROMOTE_FIDELITY"
+    }
+   }
+  },
+  {
+   "id": 134,
+   "ts": 1790390476.986445,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 81.07
+   }
+  },
+  {
+   "id": 135,
+   "ts": 1790390480.416189,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 3.43
+   }
+  },
+  {
+   "id": 136,
+   "ts": 1790390480.830456,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 0.41
+   }
+  },
+  {
+   "id": 137,
+   "ts": 1790390480.8320599,
+   "type": "recorded",
+   "exp_id": "lc_kimi1_e01",
+   "payload": {
+    "verdict": "PROMISING",
+    "codes": [],
+    "action": "TUNE"
+   }
+  },
+  {
+   "id": 138,
+   "ts": 1790390480.832389,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 139,
+   "ts": 1790390480.833097,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "DECIDE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 140,
+   "ts": 1790390529.492888,
+   "type": "decision_rejected",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "errors": [
+     "参数 max_depth 不在 lgbm 的搜索空间中，可选：['learning_rate', 'num_leaves', 'min_child_samples', 'feature_fraction', 'bagging_fraction', 'lambda_l2']"
+    ]
+   }
+  },
+  {
+   "id": 141,
+   "ts": 1790390564.119175,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 1,
+    "decision": {
+     "action": "TUNE",
+     "params": {
+      "space": {
+       "learning_rate": {
+        "low": 0.01,
+        "high": 0.15,
+        "log": true
+       },
+       "num_leaves": {
+        "low": 15,
+        "high": 127,
+        "log": false,
+        "type": "int"
+       },
+       "min_child_samples": {
+        "low": 20,
+        "high": 200,
+        "log": false,
+        "type": "int"
+       },
+       "feature_fraction": {
+        "low": 0.5,
+        "high": 1.0,
+        "log": false
+       },
+       "bagging_fraction": {
+        "low": 0.5,
+        "high": 1.0,
+        "log": false
+       },
+       "lambda_l2": {
+        "low": 0.001,
+        "high": 10.0,
+        "log": true
+       }
+      },
+      "n_trials": 12,
+      "fidelity": "low"
+     },
+     "hypothesis": "当前最优 lc_kimi1_race_lgbm (AUC=0.6501, gap=0.0036) 仍处低保真阶段且诊断无过拟合码；在修正后的合法搜索空间（去除 max_depth，仅保留 learning_rate/num_leaves/min_child_samples/feature_fraction/bagging_fraction/lambda_l2）上做小规模随机搜索，正则与采样维度的探索有望将 OOT AUC 提升 0.003~0.008。",
+     "expected_gain": "OOT dev AUC +0.003~0.008，为后续 PROMOTE_FIDELITY 提供更优配置",
+     "est_cost": {
+      "tokens": 8000.0,
+      "cpu_minutes": 25.0
+     },
+     "alternatives_considered": [
+      "PROMOTE_FIDELITY(lc_kimi1_race_lgbm)：过早，当前配置未经调参，直接升保真可能固化次优超参",
+      "TUNE 含 max_depth 的空间：上一轮已因 max_depth 不在合法搜索空间被校验拒绝，本轮剔除",
+      "EXPAND_FEATURES：templates 为空，不可用"
+     ],
+     "rationale": "diagnosis 无候选动作与策略先验（policy_prior 为空），默认沿主线 GBDT 方向推进。e01 调参结果 (0.6486) 略低于 race 基线 (0.6501)，说明先前搜索空间未命中更优区域，且上轮配置因包含非法参数 max_depth 被校验拒绝；本轮严格限定在校验给出的 6 个合法参数内，放宽正则(lambda_l2)与采样(feature/bagging_fraction)维度、压缩叶子数与 min_child_samples 范围以适配 36 期样本的低违约率。剩余 4 轮、CPU 预算 238 分钟充足，低保真 12 trials 成本可控，命中后再用 PROMOTE_FIDELITY 升保真验证。"
+    }
+   }
+  },
+  {
+   "id": 142,
+   "ts": 1790390564.122095,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 83.29
+   }
+  },
+  {
+   "id": 143,
+   "ts": 1790390566.803104,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 2.68
+   }
+  },
+  {
+   "id": 144,
+   "ts": 1790390567.213415,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 0.41
+   }
+  },
+  {
+   "id": 145,
+   "ts": 1790390567.214816,
+   "type": "recorded",
+   "exp_id": "lc_kimi1_e02",
+   "payload": {
+    "verdict": "PROMISING",
+    "codes": [],
+    "action": "TUNE"
+   }
+  },
+  {
+   "id": 146,
+   "ts": 1790390567.2151418,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 147,
+   "ts": 1790390567.215843,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "DECIDE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 148,
+   "ts": 1790390606.2650602,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "decision": {
+     "action": "PROMOTE_FIDELITY",
+     "params": {
+      "exp_id": "lc_kimi1_race_lgbm"
+     },
+     "hypothesis": "当前最优的低保真 LightGBM 配置（oot_dev_auc=0.6501, gap=0.0036）在提升到高保真度后，AUC 将维持在 0.65 附近或略有提升，且过拟合缺口保持在小范围内，从而确认为可信的最佳候选。",
+     "expected_gain": "将目前唯一的最优结果从低保真升级为高保真可信估计，锁定一个可靠的 best；若确认有效，后续轮次可在此基础上做最后的增量优化。",
+     "est_cost": {
+      "tokens": 25000.0,
+      "cpu_minutes": 90.0
+     },
+     "alternatives_considered": [
+      "TUNE: 在低保真下扩大 lgbm 搜索空间——但两次 TUNE（e01/e02 均为 0.6486）均未超过 race 基线 0.6501，低调参收益已现平台迹象",
+      "PRUNE_FEATURES: 剔除部分特征——35 个特征对 GBDT 不算冗余，缺乏证据支持剔除能带来增益",
+      "EXPAND_FEATURES: templates 为空，当前不可用",
+      "SWITCH_MODEL: 唯一备选 lr_scorecard 已因 PLATEAU 被拒，无切换价值"
+     ],
+     "rationale": "所有现有实验均为低保真，promoted 为空，而剩余仅 3 轮。低保真下调参已两次停滞在 0.6486，低于 race 基线 0.6501，继续在低保真调参期望收益低。此时把最优低保真实验提升保真度，能在预算内（238 CPU 分钟充足）获得可信的高保真基准，为最后两轮决策（是否再调参或收尾集成）提供可靠依据，符合诊断中无异常码、路径上 PROMISING 的状态。"
+    }
+   }
+  },
+  {
+   "id": 149,
+   "ts": 1790390606.2661262,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 39.05
+   }
+  },
+  {
+   "id": 150,
+   "ts": 1790390639.2243772,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 32.96
+   }
+  },
+  {
+   "id": 151,
+   "ts": 1790390639.691888,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 0.47
+   }
+  },
+  {
+   "id": 152,
+   "ts": 1790390639.693456,
+   "type": "recorded",
+   "exp_id": "lc_kimi1_e03",
+   "payload": {
+    "verdict": "ACCEPT",
+    "codes": [],
+    "action": "PROMOTE_FIDELITY"
+   }
+  },
+  {
+   "id": 153,
+   "ts": 1790390639.693751,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 154,
+   "ts": 1790390639.694556,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "DECIDE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 155,
+   "ts": 1790390679.63506,
+   "type": "decision_rejected",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "errors": [
+     "参数 max_depth 不在 lgbm 的搜索空间中，可选：['learning_rate', 'num_leaves', 'min_child_samples', 'feature_fraction', 'bagging_fraction', 'lambda_l2']"
+    ]
+   }
+  },
+  {
+   "id": 156,
+   "ts": 1790390710.143121,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 1,
+    "decision": {
+     "action": "TUNE",
+     "params": {
+      "space": {
+       "learning_rate": {
+        "low": 0.01,
+        "high": 0.2,
+        "log": true
+       },
+       "num_leaves": {
+        "low": 16,
+        "high": 256,
+        "log": true,
+        "type": "int"
+       },
+       "min_child_samples": {
+        "low": 20,
+        "high": 300,
+        "log": true,
+        "type": "int"
+       },
+       "feature_fraction": {
+        "low": 0.5,
+        "high": 1.0
+       },
+       "bagging_fraction": {
+        "low": 0.5,
+        "high": 1.0
+       },
+       "lambda_l2": {
+        "low": 0.001,
+        "high": 10.0,
+        "log": true
+       }
+      },
+      "n_trials": 30,
+      "fidelity": "full"
+     },
+     "hypothesis": "当前 best（lc_kimi1_e03, full lgbm, AUC 0.6718）尚未做任何超参搜索；在合法空间（learning_rate/num_leaves/min_child_samples/feature_fraction/bagging_fraction/lambda_l2）上做 30 次全保真搜索，预计可将 oot_dev AUC 提升 0.004~0.010，且不引入泄漏（仅用训练窗拟合、oot_dev 早停与选模）。",
+     "expected_gain": "oot_dev AUC +0.004~0.010，为剩余 2 轮内期望收益最高的方向（directions 中 GBDT 调参被列为最大单项增益来源）",
+     "est_cost": {
+      "tokens": 30000.0,
+      "cpu_minutes": 90.0
+     },
+     "alternatives_considered": [
+      "低保真 TUNE + 下轮 PROMOTE_FIDELITY：省 CPU 但只剩 2 轮，若低保真结果与全保真排序不一致会浪费最后一轮；预算（233 CPU 分钟）足以直接全保真调参",
+      "EXPAND_FEATURES：templates 为空，动作不可用",
+      "INVESTIGATE single_feature_auc：诊断无泄漏/退化码，边际信息价值低于直接调参",
+      "STOP：GBDT 调参方向期望价值明显高于成本，不满足停止条件"
+     ],
+     "rationale": "修正上一轮非法参数：搜索空间严格限定在 evaluator 允许的 6 个 lgbm 超参内，不再包含 max_depth。诊断无候选动作限制、无未处理泄漏；当前已 promoted 全保真 lgbm 但 space 仍为 null，说明主力模型从未调参。剩余 2 轮且 CPU/墙钟预算充足，直接以 full fidelity 调参可在本轮即得到与 best 可比的 AUC，避免低保真→提升的两轮链路在末轮前无法闭环的风险；n_trials=30 在 90 CPU 分钟内可完成，留有预算余量。"
+    }
+   }
+  },
+  {
+   "id": 157,
+   "ts": 1790390710.144845,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 70.45
+   }
+  },
+  {
+   "id": 158,
+   "ts": 1790390759.850271,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 49.7
+   }
+  },
+  {
+   "id": 159,
+   "ts": 1790390780.067859,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 20.22
+   }
+  },
+  {
+   "id": 160,
+   "ts": 1790390780.0697758,
+   "type": "recorded",
+   "exp_id": "lc_kimi1_e04",
+   "payload": {
+    "verdict": "INCONCLUSIVE",
+    "codes": [
+     "PLATEAU"
+    ],
+    "action": "TUNE"
+   }
+  },
+  {
+   "id": 161,
+   "ts": 1790390780.070088,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 162,
+   "ts": 1790390780.070905,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "DECIDE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 163,
+   "ts": 1790390851.972474,
+   "type": "decision_rejected",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "errors": [
+     "参数 max_depth 不在 lgbm 的搜索空间中，可选：['learning_rate', 'num_leaves', 'min_child_samples', 'feature_fraction', 'bagging_fraction', 'lambda_l2']"
+    ]
+   }
+  },
+  {
+   "id": 164,
+   "ts": 1790390888.303456,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 1,
+    "decision": {
+     "action": "TUNE",
+     "params": {
+      "space": {
+       "learning_rate": {
+        "low": 0.01,
+        "high": 0.15,
+        "log": true
+       },
+       "num_leaves": {
+        "low": 16,
+        "high": 255,
+        "log": true,
+        "type": "int"
+       },
+       "min_child_samples": {
+        "low": 20,
+        "high": 500,
+        "log": true,
+        "type": "int"
+       },
+       "feature_fraction": {
+        "low": 0.5,
+        "high": 1.0
+       },
+       "bagging_fraction": {
+        "low": 0.5,
+        "high": 1.0
+       },
+       "lambda_l2": {
+        "low": 0.001,
+        "high": 10.0,
+        "log": true
+       }
+      },
+      "n_trials": 24,
+      "fidelity": "full"
+     },
+     "hypothesis": "上一轮 TUNE 仅得到 INCONCLUSIVE/PLATEAU，可能是搜索空间过窄且包含了无效参数；在合法空间（learning_rate/num_leaves/min_child_samples/feature_fraction/bagging_fraction/lambda_l2）上做一次更宽、以正则化与容量解耦为重点的搜索，可在 full fidelity 下把 OOT-dev AUC 推过 0.6718 的平台。",
+     "expected_gain": "中等：预计 +0.002~0.006 OOT-dev AUC；这是 max_rounds=5 的最后一轮，TUNE 是剩余预算内期望价值最高的可行动作。",
+     "est_cost": {
+      "tokens": 25000.0,
+      "cpu_minutes": 90.0
+     },
+     "alternatives_considered": [
+      "EXPAND_FEATURES：templates 为空，动作不可用",
+      "SWITCH_MODEL：候选仅 lr_scorecard，其 race 已被 REJECT，切换无期望收益",
+      "STOP：仍有 227 CPU 分钟与 118 墙钟分钟，放弃最后一轮调参会浪费剩余预算"
+     ],
+     "rationale": "诊断码 PLATEAU 的策略先验为 EXPAND_FEATURES/TUNE；EXPAND_FEATURES 因 templates 为空不可用，故选 TUNE。上次输出因包含 lgbm 不支持的 max_depth 被校验拒绝，本次严格限定在允许参数集合内，并扩大 min_child_samples 与 lambda_l2 范围以区别于 e04 的 taboo 配置；预算（24 trials、约 90 CPU 分钟）低于 budget_remaining。"
+    }
+   }
+  },
+  {
+   "id": 165,
+   "ts": 1790390888.3065531,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 108.23
+   }
+  },
+  {
+   "id": 166,
+   "ts": 1790390927.901634,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 39.59
+   }
+  },
+  {
+   "id": 167,
+   "ts": 1790390948.27072,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 20.37
+   }
+  },
+  {
+   "id": 168,
+   "ts": 1790390948.272681,
+   "type": "recorded",
+   "exp_id": "lc_kimi1_e05",
+   "payload": {
+    "verdict": "INCONCLUSIVE",
+    "codes": [
+     "PLATEAU"
+    ],
+    "action": "TUNE"
+   }
+  },
+  {
+   "id": 169,
+   "ts": 1790390948.273002,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 170,
+   "ts": 1790390948.273688,
+   "type": "stop",
+   "exp_id": null,
+   "payload": {
+    "reason": "MAX_ROUNDS"
+   }
+  },
+  {
+   "id": 171,
+   "ts": 1790390948.27393,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "FINAL_GATE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 172,
+   "ts": 1790390952.26683,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "FINAL_GATE",
+    "to": "REPORT",
+    "sec": 3.99
+   }
+  },
+  {
+   "id": 173,
+   "ts": 1790390968.429368,
+   "type": "report_built",
+   "exp_id": null,
+   "payload": {
+    "model_card": "reports/model_card_lc_kimi1.md",
+    "n_risks": 2,
+    "narrative": true
+   }
+  },
+  {
+   "id": 174,
+   "ts": 1790390968.4299362,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "REPORT",
+    "to": "CONSOLIDATE",
+    "sec": 16.16
+   }
+  },
+  {
+   "id": 175,
+   "ts": 1790390968.430552,
+   "type": "consolidate_skipped",
+   "exp_id": null,
+   "payload": {
+    "why": "Memory 在第 12 项实现"
+   }
+  },
+  {
+   "id": 176,
+   "ts": 1790390968.430787,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "CONSOLIDATE",
+    "to": "DONE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 254,
+   "ts": 1790410055.668211,
+   "type": "consolidated",
+   "exp_id": null,
+   "payload": {
+    "proposed": 4,
+    "admitted": 4,
+    "dropped": [],
+    "lifecycle_changes": {
+     "210375b61c": [
+      "race:lgbm",
+      "CANDIDATE",
+      "VALIDATED"
+     ],
+     "9a24717dd6": [
+      "race:lr_scorecard",
+      "CANDIDATE",
+      "VALIDATED"
+     ],
+     "eaf0935024": [
+      "promote:lgbm",
+      "CANDIDATE",
+      "VALIDATED"
+     ]
+    }
+   }
+  },
+  {
+   "id": 256,
+   "ts": 1790410178.216788,
+   "type": "consolidated",
+   "exp_id": null,
+   "payload": {
+    "proposed": 5,
+    "admitted": 5,
+    "dropped": [],
+    "lifecycle_changes": {
+     "210375b61c": [
+      "race:lgbm",
+      "CANDIDATE",
+      "VALIDATED"
+     ],
+     "9a24717dd6": [
+      "race:lr_scorecard",
+      "CANDIDATE",
+      "VALIDATED"
+     ],
+     "eaf0935024": [
+      "promote:lgbm",
+      "CANDIDATE",
+      "VALIDATED"
+     ],
+     "7327668309": [
+      "tune:lgbm:bagging_fraction,feature_fraction,lambda_l2,learning_rate,min_child_samples,num_leaves@full",
+      "CANDIDATE",
+      "VALIDATED"
+     ]
+    }
+   }
+  }
+ ],
+ "records": [
+  {
+   "exp_id": "lc_kimi1_race_lgbm",
+   "task_id": "lc_kimi1",
+   "parent_exp_id": null,
+   "hypothesis": "模型赛跑：lgbm",
+   "action_type": "RACE",
+   "diff": {
+    "model": "lgbm"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "loan_amnt",
+     "funded_amnt",
+     "term",
+     "emp_length",
+     "home_ownership",
+     "annual_inc",
+     "verification_status",
+     "purpose",
+     "addr_state",
+     "dti",
+     "delinq_2yrs",
+     "earliest_cr_line",
+     "fico_range_low",
+     "fico_range_high",
+     "inq_last_6mths",
+     "mths_since_last_delinq",
+     "mths_since_last_record",
+     "open_acc",
+     "pub_rec",
+     "revol_bal",
+     "revol_util",
+     "total_acc",
+     "initial_list_status",
+     "collections_12_mths_ex_med",
+     "application_type",
+     "acc_now_delinq",
+     "tot_coll_amt",
+     "tot_cur_bal",
+     "open_acc_6m",
+     "open_il_12m",
+     "il_util",
+     "all_util",
+     "total_rev_hi_lim",
+     "inq_last_12m",
+     "pub_rec_bankruptcies"
+    ],
+    "space": null,
+    "fidelity": "low",
+    "n_trials": null
+   },
+   "config_hash": "6857a4b15789",
+   "fidelity": "low",
+   "metrics": {
+    "train_auc": 0.7289313825264375,
+    "valid_auc": 0.653764241244043,
+    "oot_dev_auc": 0.6501259555116259,
+    "oot_dev_ks": 0.21670507086709162,
+    "gap": 0.0036382857324170903,
+    "score_psi": 0.001280561176125494
+   },
+   "diagnosis_codes": [],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.3954533576965332,
+    "wall_minutes": 0.04943166971206665
+   },
+   "verdict": "PROMISING",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/lc_kimi1_race_lgbm/result.json"
+   }
+  },
+  {
+   "exp_id": "lc_kimi1_race_lr_scorecard",
+   "task_id": "lc_kimi1",
+   "parent_exp_id": null,
+   "hypothesis": "模型赛跑：lr_scorecard",
+   "action_type": "RACE",
+   "diff": {
+    "model": "lr_scorecard"
+   },
+   "config": {
+    "model": "lr_scorecard",
+    "features": [
+     "loan_amnt",
+     "funded_amnt",
+     "term",
+     "emp_length",
+     "home_ownership",
+     "annual_inc",
+     "verification_status",
+     "purpose",
+     "addr_state",
+     "dti",
+     "delinq_2yrs",
+     "earliest_cr_line",
+     "fico_range_low",
+     "fico_range_high",
+     "inq_last_6mths",
+     "mths_since_last_delinq",
+     "mths_since_last_record",
+     "open_acc",
+     "pub_rec",
+     "revol_bal",
+     "revol_util",
+     "total_acc",
+     "initial_list_status",
+     "collections_12_mths_ex_med",
+     "application_type",
+     "acc_now_delinq",
+     "tot_coll_amt",
+     "tot_cur_bal",
+     "open_acc_6m",
+     "open_il_12m",
+     "il_util",
+     "all_util",
+     "total_rev_hi_lim",
+     "inq_last_12m",
+     "pub_rec_bankruptcies"
+    ],
+    "space": null,
+    "fidelity": "low",
+    "n_trials": null
+   },
+   "config_hash": "8ed7afb73826",
+   "fidelity": "low",
+   "metrics": {
+    "train_auc": 0.6548565754058255,
+    "valid_auc": 0.642026451103177,
+    "oot_dev_auc": 0.6421072950064033,
+    "oot_dev_ks": 0.20720523286527837,
+    "gap": -8.084390322626867e-05,
+    "score_psi": 0.003540993261891924
+   },
+   "diagnosis_codes": [
+    "PLATEAU"
+   ],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.5794468243916829,
+    "wall_minutes": 0.07243085304896037
+   },
+   "verdict": "REJECT",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/lc_kimi1_race_lr_scorecard/result.json"
+   }
+  },
+  {
+   "exp_id": "lc_kimi1_e01",
+   "task_id": "lc_kimi1",
+   "parent_exp_id": "lc_kimi1_race_lgbm",
+   "hypothesis": "在已固化的 term=36 样本与泄漏清洗口径上，对 LightGBM 做小规模超参搜索（学习率/叶子数/子样本数/行列采样/L2）可在当前 0.6501 的 OOT-dev AUC 上获得稳健提升，且不显著扩大 train-OOT gap",
+   "action_type": "TUNE",
+   "diff": {
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.2,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 15,
+      "high": 127,
+      "log": false,
+      "type": "int"
+     },
+     "min_child_samples": {
+      "low": 20,
+      "high": 200,
+      "log": false,
+      "type": "int"
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 1.0,
+      "log": false
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 1.0,
+      "log": false
+     },
+     "lambda_l2": {
+      "low": 0.001,
+      "high": 10.0,
+      "log": true
+     }
+    },
+    "n_trials": 20,
+    "fidelity": "low"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "loan_amnt",
+     "funded_amnt",
+     "term",
+     "emp_length",
+     "home_ownership",
+     "annual_inc",
+     "verification_status",
+     "purpose",
+     "addr_state",
+     "dti",
+     "delinq_2yrs",
+     "earliest_cr_line",
+     "fico_range_low",
+     "fico_range_high",
+     "inq_last_6mths",
+     "mths_since_last_delinq",
+     "mths_since_last_record",
+     "open_acc",
+     "pub_rec",
+     "revol_bal",
+     "revol_util",
+     "total_acc",
+     "initial_list_status",
+     "collections_12_mths_ex_med",
+     "application_type",
+     "acc_now_delinq",
+     "tot_coll_amt",
+     "tot_cur_bal",
+     "open_acc_6m",
+     "open_il_12m",
+     "il_util",
+     "all_util",
+     "total_rev_hi_lim",
+     "inq_last_12m",
+     "pub_rec_bankruptcies"
+    ],
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.2,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 15,
+      "high": 127,
+      "log": false,
+      "type": "int"
+     },
+     "min_child_samples": {
+      "low": 20,
+      "high": 200,
+      "log": false,
+      "type": "int"
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 1.0,
+      "log": false
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 1.0,
+      "log": false
+     },
+     "lambda_l2": {
+      "low": 0.001,
+      "high": 10.0,
+      "log": true
+     }
+    },
+    "fidelity": "low",
+    "n_trials": 20
+   },
+   "config_hash": "fbe561aebab3",
+   "fidelity": "low",
+   "metrics": {
+    "train_auc": 0.7213244182310875,
+    "valid_auc": 0.6520569349732999,
+    "oot_dev_auc": 0.6485816561421268,
+    "oot_dev_ks": 0.21731440013548337,
+    "gap": 0.0034752788311730454,
+    "score_psi": 0.0021800178989271938
+   },
+   "diagnosis_codes": [],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.4463166872660319,
+    "wall_minutes": 0.05578958590825399
+   },
+   "verdict": "PROMISING",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/lc_kimi1_e01/result.json"
+   }
+  },
+  {
+   "exp_id": "lc_kimi1_e02",
+   "task_id": "lc_kimi1",
+   "parent_exp_id": "lc_kimi1_race_lgbm",
+   "hypothesis": "当前最优 lc_kimi1_race_lgbm (AUC=0.6501, gap=0.0036) 仍处低保真阶段且诊断无过拟合码；在修正后的合法搜索空间（去除 max_depth，仅保留 learning_rate/num_leaves/min_child_samples/feature_fraction/bagging_fraction/lambda_l2）上做小规模随机搜索，正则与采样维度的探索有望将 OOT AUC 提升 0.003~0.008。",
+   "action_type": "TUNE",
+   "diff": {
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.15,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 15,
+      "high": 127,
+      "log": false,
+      "type": "int"
+     },
+     "min_child_samples": {
+      "low": 20,
+      "high": 200,
+      "log": false,
+      "type": "int"
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 1.0,
+      "log": false
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 1.0,
+      "log": false
+     },
+     "lambda_l2": {
+      "low": 0.001,
+      "high": 10.0,
+      "log": true
+     }
+    },
+    "n_trials": 12,
+    "fidelity": "low"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "loan_amnt",
+     "funded_amnt",
+     "term",
+     "emp_length",
+     "home_ownership",
+     "annual_inc",
+     "verification_status",
+     "purpose",
+     "addr_state",
+     "dti",
+     "delinq_2yrs",
+     "earliest_cr_line",
+     "fico_range_low",
+     "fico_range_high",
+     "inq_last_6mths",
+     "mths_since_last_delinq",
+     "mths_since_last_record",
+     "open_acc",
+     "pub_rec",
+     "revol_bal",
+     "revol_util",
+     "total_acc",
+     "initial_list_status",
+     "collections_12_mths_ex_med",
+     "application_type",
+     "acc_now_delinq",
+     "tot_coll_amt",
+     "tot_cur_bal",
+     "open_acc_6m",
+     "open_il_12m",
+     "il_util",
+     "all_util",
+     "total_rev_hi_lim",
+     "inq_last_12m",
+     "pub_rec_bankruptcies"
+    ],
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.15,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 15,
+      "high": 127,
+      "log": false,
+      "type": "int"
+     },
+     "min_child_samples": {
+      "low": 20,
+      "high": 200,
+      "log": false,
+      "type": "int"
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 1.0,
+      "log": false
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 1.0,
+      "log": false
+     },
+     "lambda_l2": {
+      "low": 0.001,
+      "high": 10.0,
+      "log": true
+     }
+    },
+    "fidelity": "low",
+    "n_trials": 12
+   },
+   "config_hash": "0a9f4a975900",
+   "fidelity": "low",
+   "metrics": {
+    "train_auc": 0.7213244182310875,
+    "valid_auc": 0.6520569349732999,
+    "oot_dev_auc": 0.6485816561421268,
+    "oot_dev_ks": 0.21731440013548337,
+    "gap": 0.0034752788311730454,
+    "score_psi": 0.0021800178989271938
+   },
+   "diagnosis_codes": [],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.35052429835001625,
+    "wall_minutes": 0.04381553729375203
+   },
+   "verdict": "PROMISING",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/lc_kimi1_e02/result.json"
+   }
+  },
+  {
+   "exp_id": "lc_kimi1_e03",
+   "task_id": "lc_kimi1",
+   "parent_exp_id": "lc_kimi1_race_lgbm",
+   "hypothesis": "当前最优的低保真 LightGBM 配置（oot_dev_auc=0.6501, gap=0.0036）在提升到高保真度后，AUC 将维持在 0.65 附近或略有提升，且过拟合缺口保持在小范围内，从而确认为可信的最佳候选。",
+   "action_type": "PROMOTE_FIDELITY",
+   "diff": {
+    "exp_id": "lc_kimi1_race_lgbm"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "loan_amnt",
+     "funded_amnt",
+     "term",
+     "emp_length",
+     "home_ownership",
+     "annual_inc",
+     "verification_status",
+     "purpose",
+     "addr_state",
+     "dti",
+     "delinq_2yrs",
+     "earliest_cr_line",
+     "fico_range_low",
+     "fico_range_high",
+     "inq_last_6mths",
+     "mths_since_last_delinq",
+     "mths_since_last_record",
+     "open_acc",
+     "pub_rec",
+     "revol_bal",
+     "revol_util",
+     "total_acc",
+     "initial_list_status",
+     "collections_12_mths_ex_med",
+     "application_type",
+     "acc_now_delinq",
+     "tot_coll_amt",
+     "tot_cur_bal",
+     "open_acc_6m",
+     "open_il_12m",
+     "il_util",
+     "all_util",
+     "total_rev_hi_lim",
+     "inq_last_12m",
+     "pub_rec_bankruptcies"
+    ],
+    "space": null,
+    "fidelity": "full",
+    "n_trials": null
+   },
+   "config_hash": "da433d754a22",
+   "fidelity": "full",
+   "metrics": {
+    "train_auc": 0.7635482909265409,
+    "valid_auc": 0.674843083284168,
+    "oot_dev_auc": 0.6718327765825338,
+    "oot_dev_ks": 0.24952616976618813,
+    "gap": 0.003010306701634158,
+    "score_psi": 0.002404989955911849
+   },
+   "diagnosis_codes": [],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 4.3879465421040855,
+    "wall_minutes": 0.5484933177630107
+   },
+   "verdict": "ACCEPT",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/lc_kimi1_e03/result.json"
+   }
+  },
+  {
+   "exp_id": "lc_kimi1_e04",
+   "task_id": "lc_kimi1",
+   "parent_exp_id": "lc_kimi1_e03",
+   "hypothesis": "当前 best（lc_kimi1_e03, full lgbm, AUC 0.6718）尚未做任何超参搜索；在合法空间（learning_rate/num_leaves/min_child_samples/feature_fraction/bagging_fraction/lambda_l2）上做 30 次全保真搜索，预计可将 oot_dev AUC 提升 0.004~0.010，且不引入泄漏（仅用训练窗拟合、oot_dev 早停与选模）。",
+   "action_type": "TUNE",
+   "diff": {
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.2,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 16,
+      "high": 256,
+      "log": true,
+      "type": "int"
+     },
+     "min_child_samples": {
+      "low": 20,
+      "high": 300,
+      "log": true,
+      "type": "int"
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 1.0
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 1.0
+     },
+     "lambda_l2": {
+      "low": 0.001,
+      "high": 10.0,
+      "log": true
+     }
+    },
+    "n_trials": 30,
+    "fidelity": "full"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "loan_amnt",
+     "funded_amnt",
+     "term",
+     "emp_length",
+     "home_ownership",
+     "annual_inc",
+     "verification_status",
+     "purpose",
+     "addr_state",
+     "dti",
+     "delinq_2yrs",
+     "earliest_cr_line",
+     "fico_range_low",
+     "fico_range_high",
+     "inq_last_6mths",
+     "mths_since_last_delinq",
+     "mths_since_last_record",
+     "open_acc",
+     "pub_rec",
+     "revol_bal",
+     "revol_util",
+     "total_acc",
+     "initial_list_status",
+     "collections_12_mths_ex_med",
+     "application_type",
+     "acc_now_delinq",
+     "tot_coll_amt",
+     "tot_cur_bal",
+     "open_acc_6m",
+     "open_il_12m",
+     "il_util",
+     "all_util",
+     "total_rev_hi_lim",
+     "inq_last_12m",
+     "pub_rec_bankruptcies"
+    ],
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.2,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 16,
+      "high": 256,
+      "log": true,
+      "type": "int"
+     },
+     "min_child_samples": {
+      "low": 20,
+      "high": 300,
+      "log": true,
+      "type": "int"
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 1.0
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 1.0
+     },
+     "lambda_l2": {
+      "low": 0.001,
+      "high": 10.0,
+      "log": true
+     }
+    },
+    "fidelity": "full",
+    "n_trials": 30
+   },
+   "config_hash": "342b9dabfd4f",
+   "fidelity": "full",
+   "metrics": {
+    "train_auc": 0.7635482909265409,
+    "valid_auc": 0.674843083284168,
+    "oot_dev_auc": 0.6718327765825338,
+    "oot_dev_ks": 0.24952616976618813,
+    "gap": 0.003010306701634158,
+    "score_psi": 0.002404989955911849
+   },
+   "diagnosis_codes": [
+    "PLATEAU"
+   ],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 6.620510260264079,
+    "wall_minutes": 0.8275637825330099
+   },
+   "verdict": "INCONCLUSIVE",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/lc_kimi1_e04/result.json"
+   }
+  },
+  {
+   "exp_id": "lc_kimi1_e05",
+   "task_id": "lc_kimi1",
+   "parent_exp_id": "lc_kimi1_e03",
+   "hypothesis": "上一轮 TUNE 仅得到 INCONCLUSIVE/PLATEAU，可能是搜索空间过窄且包含了无效参数；在合法空间（learning_rate/num_leaves/min_child_samples/feature_fraction/bagging_fraction/lambda_l2）上做一次更宽、以正则化与容量解耦为重点的搜索，可在 full fidelity 下把 OOT-dev AUC 推过 0.6718 的平台。",
+   "action_type": "TUNE",
+   "diff": {
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.15,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 16,
+      "high": 255,
+      "log": true,
+      "type": "int"
+     },
+     "min_child_samples": {
+      "low": 20,
+      "high": 500,
+      "log": true,
+      "type": "int"
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 1.0
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 1.0
+     },
+     "lambda_l2": {
+      "low": 0.001,
+      "high": 10.0,
+      "log": true
+     }
+    },
+    "n_trials": 24,
+    "fidelity": "full"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "loan_amnt",
+     "funded_amnt",
+     "term",
+     "emp_length",
+     "home_ownership",
+     "annual_inc",
+     "verification_status",
+     "purpose",
+     "addr_state",
+     "dti",
+     "delinq_2yrs",
+     "earliest_cr_line",
+     "fico_range_low",
+     "fico_range_high",
+     "inq_last_6mths",
+     "mths_since_last_delinq",
+     "mths_since_last_record",
+     "open_acc",
+     "pub_rec",
+     "revol_bal",
+     "revol_util",
+     "total_acc",
+     "initial_list_status",
+     "collections_12_mths_ex_med",
+     "application_type",
+     "acc_now_delinq",
+     "tot_coll_amt",
+     "tot_cur_bal",
+     "open_acc_6m",
+     "open_il_12m",
+     "il_util",
+     "all_util",
+     "total_rev_hi_lim",
+     "inq_last_12m",
+     "pub_rec_bankruptcies"
+    ],
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.15,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 16,
+      "high": 255,
+      "log": true,
+      "type": "int"
+     },
+     "min_child_samples": {
+      "low": 20,
+      "high": 500,
+      "log": true,
+      "type": "int"
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 1.0
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 1.0
+     },
+     "lambda_l2": {
+      "low": 0.001,
+      "high": 10.0,
+      "log": true
+     }
+    },
+    "fidelity": "full",
+    "n_trials": 24
+   },
+   "config_hash": "f09f4f75cfa5",
+   "fidelity": "full",
+   "metrics": {
+    "train_auc": 0.7635482909265409,
+    "valid_auc": 0.674843083284168,
+    "oot_dev_auc": 0.6718327765825338,
+    "oot_dev_ks": 0.24952616976618813,
+    "gap": 0.003010306701634158,
+    "score_psi": 0.002404989955911849
+   },
+   "diagnosis_codes": [
+    "PLATEAU"
+   ],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 5.271150398254394,
+    "wall_minutes": 0.6588937997817993
+   },
+   "verdict": "INCONCLUSIVE",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/lc_kimi1_e05/result.json"
+   }
+  }
+ ]
+}

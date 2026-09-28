@@ -1,0 +1,1380 @@
+{
+ "task_id": "hotel_deepseek3",
+ "note": "DeepSeek 在仓库自带酒店样本上的真实运行，包含每次 LLM 调用的 prompt 与回复原文。",
+ "meta": {
+  "dataset": "酒店预订样本（data_sample/，7,997 行）",
+  "llm": "DeepSeek（deepseek-chat）",
+  "has_sample_data": true,
+  "settings": "最多 5 轮决策 · 抽样试跑用 50% 数据 · 全量训练每次 10 个 trial · 无人值守（L0） · 不读取历史经验"
+ },
+ "events": [
+  {
+   "id": 353,
+   "ts": 1790612282.9770849,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "INTAKE",
+    "to": "PROFILE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 354,
+   "ts": 1790612283.077039,
+   "type": "profile",
+   "exp_id": null,
+   "payload": {
+    "n_samples": 4217,
+    "bad_rate": 0.35973440834716625,
+    "n_features": 27,
+    "missing_rate": 0.033488788765051514,
+    "time_span_months": 17
+   }
+  },
+  {
+   "id": 355,
+   "ts": 1790612283.0777118,
+   "type": "memory_retrieval",
+   "exp_id": null,
+   "payload": {
+    "nearest": null,
+    "distance": null,
+    "cold_start": true,
+    "n_active_lessons": 0
+   }
+  },
+  {
+   "id": 356,
+   "ts": 1790612283.0781739,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "PROFILE",
+    "to": "PLAN",
+    "sec": 0.1
+   }
+  },
+  {
+   "id": 357,
+   "ts": 1790612287.044672,
+   "type": "llm_call",
+   "exp_id": null,
+   "payload": {
+    "stage": "PLAN",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "system_chars": 177,
+    "prompt": "```json\n{\"mode\": \"PLAN\", \"spec\": {\"dataset\": \"hotel_bookings\", \"entity_key\": \"row_index\", \"label_def\": \"预订最终被取消（通常包含 No-Show），加载时用 reservation_status 校验该对应关系，校验后 reservation_status 立即剔除\", \"label_col\": \"is_canceled\", \"observation_time_col\": \"arrival_date - lead_time\", \"oot_windows\": {\"oot_dev\": [\"2017-01\", \"2017-04\"], \"holdout\": [\"2017-05\", \"2017-08\"]}, \"target_metric\": \"auc\", \"target_value\": null, \"constraints\": {\"interpretability\": \"none\", \"max_features\": null, \"banned_models\": []}, \"budget\": {\"tokens\": 200000.0, \"cpu_minutes\": 240.0, \"wall_minutes\": 120.0}, \"autonomy\": \"L0\"}, \"n_features\": 27}\n```",
+    "latency_s": 3.966,
+    "tokens": 748,
+    "response": "{\"directions\": [{\"direction\": \"基于 arrival_date 与 lead_time 构造时间衍生特征（预订提前期分箱、到达月份/星期、季节、节假日邻近度），并做目标编码\", \"rationale\": \"规格已明确 observation_time_col = arrival_date - lead_time，说明时间信息是核心信号；原始 27 特征中时间字段多为原始日期/数值，未充分表达季节性、提前期非线性与周期性，衍生后能显著提升树模型对取消行为的刻画能力，且成本低、可解释性无约束\", \"expected_gain\": \"AUC 提升潜力较大，特征表达更充分\"}, {\"direction\": \"对高基数类别特征（country、agent、market_segment、distribution_channel 等）做频次编码/目标编码与稀有类别归并\", \"rationale\": \"酒店预订数据中渠道与代理是取消行为的关键驱动，原始 one-hot 会维度爆炸且稀疏；频次与目标编码能在有限特征预算下保留信息，降低过拟合，成本可控\", \"expected_gain\": \"中等偏高的 AUC 提升，尤其对渠道相关取消模式\"}, {\"direction\": \"构造预订行为聚合特征（同客户/同代理历史取消率、历史预订量、lead_time 相对分位），并严格按 observation_time 做时间切分防泄漏\", \"rationale\": \"取消具有强个体/渠道惯性，历史行为聚合能捕捉静态特征无法表达的动态风险；但需按观察时点做时序聚合以避免未来信息泄漏，实现成本中等\", \"expected_gain\": \"中等 AUC 提升，风险在于泄漏控制不当\"}, {\"direction\": \"在现有特征上做缺失值语义化处理（如 agent/company 缺失代表直客/无代理）与异常值截断，并对比缺失指示特征\", \"rationale\": \"hotel_bookings 中 agent、company、country 缺失并非随机，缺失本身携带渠道信息；显式建模缺失语义成本极低，可作为基线增强，为后续特征工程提供干净输入\", \"expected_gain\": \"小幅但稳定的 AUC 提升，成本最低\"}]}"
+   }
+  },
+  {
+   "id": 358,
+   "ts": 1790612288.3431559,
+   "type": "evaluated",
+   "exp_id": "hotel_deepseek3_race_lgbm",
+   "payload": {
+    "verdict": "PROMISING",
+    "codes": [
+     "PSI_DRIFT"
+    ],
+    "guardrail_failures": [],
+    "model": "lgbm",
+    "fidelity": "low",
+    "metrics": {
+     "valid_auc": 0.8614399500234267,
+     "oot_dev_auc": 0.8410495215391709,
+     "score_psi": 0.16495299091741827
+    },
+    "baseline": null,
+    "compare": null
+   }
+  },
+  {
+   "id": 359,
+   "ts": 1790612289.942562,
+   "type": "evaluated",
+   "exp_id": "hotel_deepseek3_race_lr_scorecard",
+   "payload": {
+    "verdict": "INCONCLUSIVE",
+    "codes": [
+     "PLATEAU"
+    ],
+    "guardrail_failures": [],
+    "model": "lr_scorecard",
+    "fidelity": "low",
+    "metrics": {
+     "valid_auc": 0.8054583788848977,
+     "oot_dev_auc": 0.8280591132451001,
+     "score_psi": 0.07427530430518399
+    },
+    "baseline": "hotel_deepseek3_race_lgbm",
+    "compare": {
+     "delta": -0.01299040829407061,
+     "ci_low": -0.028661450665885834,
+     "ci_high": 0.0022735216654238373,
+     "alpha": 0.05,
+     "significant": false,
+     "k": 1
+    }
+   }
+  },
+  {
+   "id": 360,
+   "ts": 1790612289.944198,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "PLAN",
+    "to": "DECIDE",
+    "sec": 6.87
+   }
+  },
+  {
+   "id": 361,
+   "ts": 1790612292.241152,
+   "type": "llm_call",
+   "exp_id": null,
+   "payload": {
+    "stage": "DECIDE",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "system_chars": 1996,
+    "prompt": "以下是当前上下文（JSON）。请输出决策。\n\n```json\n{\n \"mode\": \"DECIDE\",\n \"spec\": {\n  \"dataset\": \"hotel_bookings\",\n  \"label_def\": \"预订最终被取消（通常包含 No-Show），加载时用 reservation_status 校验该对应关系，校验后 reservation_status 立即剔除\",\n  \"target\": [\n   \"auc\",\n   null\n  ],\n  \"constraints\": {\n   \"interpretability\": \"none\",\n   \"max_features\": null,\n   \"banned_models\": []\n  },\n  \"autonomy\": \"L0\"\n },\n \"round_no\": 1,\n \"max_rounds\": 5,\n \"budget_remaining\": {\n  \"tokens\": 199252.0,\n  \"cpu_minutes\": 239.65601854324342,\n  \"wall_minutes\": 119.95700231790542\n },\n \"best\": null,\n \"current_node\": \"hotel_deepseek3_race_lgbm\",\n \"current_config\": {\n  \"model\": \"lgbm\",\n  \"features\": \"27 个\",\n  \"space\": null,\n  \"fidelity\": \"low\",\n  \"n_trials\": null\n },\n \"path\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  }\n ],\n \"top_k\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n   \"action\": \"RACE\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8281,\n   \"gap\": -0.0226,\n   \"verdict\": \"INCONCLUSIVE\",\n   \"codes\": [\n    \"PLATEAU\"\n   ]\n  }\n ],\n \"recent_rejected\": [],\n \"race\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n   \"action\": \"RACE\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8281,\n   \"gap\": -0.0226,\n   \"verdict\": \"INCONCLUSIVE\",\n   \"codes\": [\n    \"PLATEAU\"\n   ]\n  }\n ],\n \"promoted\": [],\n \"diagnosis\": {\n  \"codes\": [\n   \"NO_FINAL_MODEL\"\n  ],\n  \"policy_prior\": {\n   \"NO_FINAL_MODEL\": [\n    \"PROMOTE_FIDELITY\"\n   ]\n  }\n },\n \"final_model\": {\n  \"exists\": false,\n  \"promotable\": [\n   {\n    \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n    \"model\": \"lgbm\",\n    \"verdict\": \"PROMISING\",\n    \"oot_dev_auc\": 0.841,\n    \"gap\": 0.0204\n   },\n   {\n    \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n    \"model\": \"lr_scorecard\",\n    \"verdict\": \"INCONCLUSIVE\",\n    \"oot_dev_auc\": 0.8281,\n    \"gap\": -0.0226\n   }\n  ],\n  \"rounds_left\": 5,\n  \"rule\": \"只有全保真度（full）实验能被 ACCEPT 成为最终模型；PROMOTE_FIDELITY 把 promotable 里的低保真实验在全量数据上复验。全量复验同样要过 OVERFIT_GAP（gap = valid − OOT-dev 超过阈值即拒），选谁时要同时看 AUC 和 gap\"\n },\n \"unhandled_leaks\": {},\n \"oot_dev\": {\n  \"used\": 1,\n  \"max\": 30,\n  \"next_alpha\": 0.0295\n },\n \"taboo_count\": 2,\n \"models_available\": [\n  \"lgbm\",\n  \"lr_scorecard\"\n ],\n \"templates\": [],\n \"tunable\": {\n  \"learning_rate\": {\n   \"low\": 0.01,\n   \"high\": 0.2,\n   \"log\": true\n  },\n  \"num_leaves\": {\n   \"low\": 8,\n   \"high\": 128,\n   \"type\": \"int\",\n   \"log\": true\n  },\n  \"min_child_samples\": {\n   \"low\": 20,\n   \"high\": 500,\n   \"type\": \"int\",\n   \"log\": true\n  },\n  \"feature_fraction\": {\n   \"low\": 0.5,\n   \"high\": 1.0\n  },\n  \"bagging_fraction\": {\n   \"low\": 0.5,\n   \"high\": 1.0\n  },\n  \"lambda_l2\": {\n   \"low\": 0.001,\n   \"high\": 100.0,\n   \"log\": true\n  }\n },\n \"monotone\": {\n  \"on\": false,\n  \"supported\": true,\n  \"rule\": \"TUNE 带 monotone:true 后，若 AUC 不显著变差且分数 PSI 更优则保留；方向来自领域先验，没有先验的特征不加约束\"\n },\n \"fidelity_options\": {\n  \"low\": {\n   \"sample_frac\": 0.5,\n   \"n_trials\": 20\n  },\n  \"full\": {\n   \"sample_frac\": 1.0,\n   \"n_trials\": 10\n  }\n },\n \"directions\": [\n  {\n   \"direction\": \"基于 arrival_date 与 lead_time 构造时间衍生特征（预订提前期分箱、到达月份/星期、季节、节假日邻近度），并做目标编码\",\n   \"rationale\": \"规格已明确 observation_time_col = arrival_date - lead_time，说明时间信息是核心信号；原始 27 特征中时间字段多为原始日期/数值，未充分表达季节性、提前期非线性与周期性，衍生后能显著提升树模型对取消行为的刻画能力，且成本低、可解释性无约束\",\n   \"expected_gain\": \"AUC 提升潜力较大，特征表达更充分\"\n  },\n  {\n   \"direction\": \"对高基数类别特征（country、agent、market_segment、distribution_channel 等）做频次编码/目标编码与稀有类别归并\",\n   \"rationale\": \"酒店预订数据中渠道与代理是取消行为的关键驱动，原始 one-hot 会维度爆炸且稀疏；频次与目标编码能在有限特征预算下保留信息，降低过拟合，成本可控\",\n   \"expected_gain\": \"中等偏高的 AUC 提升，尤其对渠道相关取消模式\"\n  },\n  {\n   \"direction\": \"构造预订行为聚合特征（同客户/同代理历史取消率、历史预订量、lead_time 相对分位），并严格按 observation_time 做时间切分防泄漏\",\n   \"rationale\": \"取消具有强个体/渠道惯性，历史行为聚合能捕捉静态特征无法表达的动态风险；但需按观察时点做时序聚合以避免未来信息泄漏，实现成本中等\",\n   \"expected_gain\": \"中等 AUC 提升，风险在于泄漏控制不当\"\n  },\n  {\n   \"direction\": \"在现有特征上做缺失值语义化处理（如 agent/company 缺失代表直客/无代理）与异常值截断，并对比缺失指示特征\",\n   \"rationale\": \"hotel_bookings 中 agent、company、country 缺失并非随机，缺失本身携带渠道信息；显式建模缺失语义成本极低，可作为基线增强，为后续特征工程提供干净输入\",\n   \"expected_gain\": \"小幅但稳定的 AUC 提升，成本最低\"\n  }\n ],\n \"memory\": null,\n \"investigations\": {}\n}\n```\n",
+    "latency_s": 2.294,
+    "tokens": 3186,
+    "response": "```json\n{\n \"action\": \"PROMOTE_FIDELITY\",\n \"params\": {\"exp_id\": \"hotel_deepseek3_race_lgbm\"},\n \"hypothesis\": \"lgbm 低保真实验 oot_dev_auc=0.841、gap=0.0204，是当前最优且 verdict=PROMISING；全量复验有望通过 OVERFIT_GAP 并成为最终模型，解决 NO_FINAL_MODEL。\",\n \"expected_gain\": \"获得首个全保真最终模型，锁定当前最优 AUC 基线\",\n \"est_cost\": {\"tokens\": 8000, \"cpu_minutes\": 40},\n \"alternatives_considered\": [\n  \"PROMOTE_FIDELITY hotel_deepseek3_race_lr_scorecard（AUC 更低 0.8281，虽 gap 为负更稳，但先升最优候选）\",\n  \"TUNE lgbm 超参（低保真再好也无最终模型，需先有 full 实验）\",\n  \"EXPAND_FEATURES 时间衍生特征（无模板，需 run_code 逃生通道，成本高且需人工批准）\"\n ],\n \"rationale\": \"诊断码 NO_FINAL_MODEL 的策略先验即 PROMOTE_FIDELITY，且 final_model.exists=false，必须先把低保真实验升到全保真才能产出最终模型。lgbm 候选 AUC 最高（0.841）且 verdict=PROMISING，gap=0.0204 处于可接受范围，优先升它；lr_scorecard 虽 gap 更稳但 AUC 明显偏低，留作备选。\"\n}\n```"
+   }
+  },
+  {
+   "id": 362,
+   "ts": 1790612292.245002,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "decision": {
+     "action": "PROMOTE_FIDELITY",
+     "params": {
+      "exp_id": "hotel_deepseek3_race_lgbm"
+     },
+     "hypothesis": "lgbm 低保真实验 oot_dev_auc=0.841、gap=0.0204，是当前最优且 verdict=PROMISING；全量复验有望通过 OVERFIT_GAP 并成为最终模型，解决 NO_FINAL_MODEL。",
+     "expected_gain": "获得首个全保真最终模型，锁定当前最优 AUC 基线",
+     "est_cost": {
+      "tokens": 8000.0,
+      "cpu_minutes": 40.0
+     },
+     "alternatives_considered": [
+      "PROMOTE_FIDELITY hotel_deepseek3_race_lr_scorecard（AUC 更低 0.8281，虽 gap 为负更稳，但先升最优候选）",
+      "TUNE lgbm 超参（低保真再好也无最终模型，需先有 full 实验）",
+      "EXPAND_FEATURES 时间衍生特征（无模板，需 run_code 逃生通道，成本高且需人工批准）"
+     ],
+     "rationale": "诊断码 NO_FINAL_MODEL 的策略先验即 PROMOTE_FIDELITY，且 final_model.exists=false，必须先把低保真实验升到全保真才能产出最终模型。lgbm 候选 AUC 最高（0.841）且 verdict=PROMISING，gap=0.0204 处于可接受范围，优先升它；lr_scorecard 虽 gap 更稳但 AUC 明显偏低，留作备选。"
+    }
+   }
+  },
+  {
+   "id": 363,
+   "ts": 1790612292.2467399,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 2.3
+   }
+  },
+  {
+   "id": 364,
+   "ts": 1790612293.486079,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 1.24
+   }
+  },
+  {
+   "id": 365,
+   "ts": 1790612293.502316,
+   "type": "evaluated",
+   "exp_id": "hotel_deepseek3_e01",
+   "payload": {
+    "verdict": "REJECT",
+    "codes": [
+     "OVERFIT_GAP"
+    ],
+    "guardrail_failures": [
+     "OVERFIT_GAP"
+    ],
+    "model": "lgbm",
+    "fidelity": "full",
+    "metrics": {
+     "valid_auc": 0.8730618319577865,
+     "oot_dev_auc": 0.8325063813518345,
+     "score_psi": 0.059270639571418905
+    },
+    "baseline": null,
+    "compare": null
+   }
+  },
+  {
+   "id": 366,
+   "ts": 1790612293.502988,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 0.02
+   }
+  },
+  {
+   "id": 367,
+   "ts": 1790612293.5042272,
+   "type": "recorded",
+   "exp_id": "hotel_deepseek3_e01",
+   "payload": {
+    "verdict": "REJECT",
+    "codes": [
+     "OVERFIT_GAP"
+    ],
+    "action": "PROMOTE_FIDELITY"
+   }
+  },
+  {
+   "id": 368,
+   "ts": 1790612293.5046358,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 369,
+   "ts": 1790612293.5053692,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "DECIDE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 370,
+   "ts": 1790612296.4117272,
+   "type": "llm_call",
+   "exp_id": null,
+   "payload": {
+    "stage": "DECIDE",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "system_chars": 1996,
+    "prompt": "以下是当前上下文（JSON）。请输出决策。\n\n```json\n{\n \"mode\": \"DECIDE\",\n \"spec\": {\n  \"dataset\": \"hotel_bookings\",\n  \"label_def\": \"预订最终被取消（通常包含 No-Show），加载时用 reservation_status 校验该对应关系，校验后 reservation_status 立即剔除\",\n  \"target\": [\n   \"auc\",\n   null\n  ],\n  \"constraints\": {\n   \"interpretability\": \"none\",\n   \"max_features\": null,\n   \"banned_models\": []\n  },\n  \"autonomy\": \"L0\"\n },\n \"round_no\": 2,\n \"max_rounds\": 5,\n \"budget_remaining\": {\n  \"tokens\": 196066.0,\n  \"cpu_minutes\": 239.49616028467815,\n  \"wall_minutes\": 119.93702003558477\n },\n \"best\": null,\n \"current_node\": \"hotel_deepseek3_race_lgbm\",\n \"current_config\": {\n  \"model\": \"lgbm\",\n  \"features\": \"27 个\",\n  \"space\": null,\n  \"fidelity\": \"low\",\n  \"n_trials\": null\n },\n \"path\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  }\n ],\n \"top_k\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e01\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8325,\n   \"gap\": 0.0406,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n   \"action\": \"RACE\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8281,\n   \"gap\": -0.0226,\n   \"verdict\": \"INCONCLUSIVE\",\n   \"codes\": [\n    \"PLATEAU\"\n   ]\n  }\n ],\n \"recent_rejected\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_e01\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8325,\n   \"gap\": 0.0406,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  }\n ],\n \"race\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n   \"action\": \"RACE\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8281,\n   \"gap\": -0.0226,\n   \"verdict\": \"INCONCLUSIVE\",\n   \"codes\": [\n    \"PLATEAU\"\n   ]\n  }\n ],\n \"promoted\": [\n  \"hotel_deepseek3_race_lgbm\"\n ],\n \"diagnosis\": {\n  \"codes\": [\n   \"OVERFIT_GAP\",\n   \"NO_FINAL_MODEL\"\n  ],\n  \"policy_prior\": {\n   \"OVERFIT_GAP\": [\n    \"PRUNE_FEATURES\",\n    \"TUNE\",\n    \"SWITCH_MODEL\"\n   ],\n   \"NO_FINAL_MODEL\": [\n    \"PROMOTE_FIDELITY\"\n   ]\n  }\n },\n \"final_model\": {\n  \"exists\": false,\n  \"promotable\": [\n   {\n    \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n    \"model\": \"lr_scorecard\",\n    \"verdict\": \"INCONCLUSIVE\",\n    \"oot_dev_auc\": 0.8281,\n    \"gap\": -0.0226\n   }\n  ],\n  \"rounds_left\": 4,\n  \"rule\": \"只有全保真度（full）实验能被 ACCEPT 成为最终模型；PROMOTE_FIDELITY 把 promotable 里的低保真实验在全量数据上复验。全量复验同样要过 OVERFIT_GAP（gap = valid − OOT-dev 超过阈值即拒），选谁时要同时看 AUC 和 gap\"\n },\n \"unhandled_leaks\": {},\n \"oot_dev\": {\n  \"used\": 1,\n  \"max\": 30,\n  \"next_alpha\": 0.0295\n },\n \"taboo_count\": 3,\n \"models_available\": [\n  \"lgbm\",\n  \"lr_scorecard\"\n ],\n \"templates\": [],\n \"tunable\": {\n  \"learning_rate\": {\n   \"low\": 0.01,\n   \"high\": 0.2,\n   \"log\": true\n  },\n  \"num_leaves\": {\n   \"low\": 8,\n   \"high\": 128,\n   \"type\": \"int\",\n   \"log\": true\n  },\n  \"min_child_samples\": {\n   \"low\": 20,\n   \"high\": 500,\n   \"type\": \"int\",\n   \"log\": true\n  },\n  \"feature_fraction\": {\n   \"low\": 0.5,\n   \"high\": 1.0\n  },\n  \"bagging_fraction\": {\n   \"low\": 0.5,\n   \"high\": 1.0\n  },\n  \"lambda_l2\": {\n   \"low\": 0.001,\n   \"high\": 100.0,\n   \"log\": true\n  }\n },\n \"monotone\": {\n  \"on\": false,\n  \"supported\": true,\n  \"rule\": \"TUNE 带 monotone:true 后，若 AUC 不显著变差且分数 PSI 更优则保留；方向来自领域先验，没有先验的特征不加约束\"\n },\n \"fidelity_options\": {\n  \"low\": {\n   \"sample_frac\": 0.5,\n   \"n_trials\": 20\n  },\n  \"full\": {\n   \"sample_frac\": 1.0,\n   \"n_trials\": 10\n  }\n },\n \"directions\": [\n  {\n   \"direction\": \"基于 arrival_date 与 lead_time 构造时间衍生特征（预订提前期分箱、到达月份/星期、季节、节假日邻近度），并做目标编码\",\n   \"rationale\": \"规格已明确 observation_time_col = arrival_date - lead_time，说明时间信息是核心信号；原始 27 特征中时间字段多为原始日期/数值，未充分表达季节性、提前期非线性与周期性，衍生后能显著提升树模型对取消行为的刻画能力，且成本低、可解释性无约束\",\n   \"expected_gain\": \"AUC 提升潜力较大，特征表达更充分\"\n  },\n  {\n   \"direction\": \"对高基数类别特征（country、agent、market_segment、distribution_channel 等）做频次编码/目标编码与稀有类别归并\",\n   \"rationale\": \"酒店预订数据中渠道与代理是取消行为的关键驱动，原始 one-hot 会维度爆炸且稀疏；频次与目标编码能在有限特征预算下保留信息，降低过拟合，成本可控\",\n   \"expected_gain\": \"中等偏高的 AUC 提升，尤其对渠道相关取消模式\"\n  },\n  {\n   \"direction\": \"构造预订行为聚合特征（同客户/同代理历史取消率、历史预订量、lead_time 相对分位），并严格按 observation_time 做时间切分防泄漏\",\n   \"rationale\": \"取消具有强个体/渠道惯性，历史行为聚合能捕捉静态特征无法表达的动态风险；但需按观察时点做时序聚合以避免未来信息泄漏，实现成本中等\",\n   \"expected_gain\": \"中等 AUC 提升，风险在于泄漏控制不当\"\n  },\n  {\n   \"direction\": \"在现有特征上做缺失值语义化处理（如 agent/company 缺失代表直客/无代理）与异常值截断，并对比缺失指示特征\",\n   \"rationale\": \"hotel_bookings 中 agent、company、country 缺失并非随机，缺失本身携带渠道信息；显式建模缺失语义成本极低，可作为基线增强，为后续特征工程提供干净输入\",\n   \"expected_gain\": \"小幅但稳定的 AUC 提升，成本最低\"\n  }\n ],\n \"memory\": null,\n \"investigations\": {}\n}\n```\n",
+    "latency_s": 2.903,
+    "tokens": 3570,
+    "response": "```json\n{\n  \"action\": \"TUNE\",\n  \"params\": {\n    \"space\": {\n      \"learning_rate\": {\"low\": 0.01, \"high\": 0.1, \"log\": true},\n      \"num_leaves\": {\"low\": 8, \"high\": 64, \"type\": \"int\", \"log\": true},\n      \"min_child_samples\": {\"low\": 50, \"high\": 500, \"type\": \"int\", \"log\": true},\n      \"feature_fraction\": {\"low\": 0.5, \"high\": 0.9},\n      \"bagging_fraction\": {\"low\": 0.5, \"high\": 0.9},\n      \"lambda_l2\": {\"low\": 1.0, \"high\": 100.0, \"log\": true}\n    },\n    \"n_trials\": 20,\n    \"fidelity\": \"low\"\n  },\n  \"hypothesis\": \"当前 lgbm 低保真实验 gap=0.0204 且带 PSI_DRIFT，说明模型复杂度偏高、对训练分布过拟合。通过收紧 num_leaves 上限、提高 min_child_samples 下限、加大 lambda_l2 正则，可在保持 AUC 的同时压低 gap，为后续全量复验通过 OVERFIT_GAP 做准备。\",\n  \"expected_gain\": \"gap 从 0.0204 降到阈值以内，AUC 维持或小幅提升，使 lgbm 成为可 promote 的稳健候选\",\n  \"est_cost\": {\"tokens\": 12000, \"cpu_minutes\": 25},\n  \"alternatives_considered\": [\n    \"PROMOTE_FIDELITY(hotel_deepseek3_race_lr_scorecard)\",\n    \"PRUNE_FEATURES\",\n    \"SWITCH_MODEL\"\n  ],\n  \"rationale\": \"诊断码为 OVERFIT_GAP + NO_FINAL_MODEL，策略先验首选 PRUNE_FEATURES/TUNE/SWITCH_MODEL。当前唯一 promotable 是 lr_scorecard（AUC 0.8281 偏低且 INCONCLUSIVE），而 lgbm 的 AUC 0.841 明显更高但 gap 偏大；直接 promote lgbm 风险高（此前 e01 全量复验已因 OVERFIT_GAP 被拒）。因此先在低保真度上对 lgbm 做正则化调参，压低 gap 后再考虑升保真度，比盲目升保真度或换模型更有希望产出可接受的全量模型。\"\n}\n```"
+   }
+  },
+  {
+   "id": 371,
+   "ts": 1790612296.415033,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "decision": {
+     "action": "TUNE",
+     "params": {
+      "space": {
+       "learning_rate": {
+        "low": 0.01,
+        "high": 0.1,
+        "log": true
+       },
+       "num_leaves": {
+        "low": 8,
+        "high": 64,
+        "type": "int",
+        "log": true
+       },
+       "min_child_samples": {
+        "low": 50,
+        "high": 500,
+        "type": "int",
+        "log": true
+       },
+       "feature_fraction": {
+        "low": 0.5,
+        "high": 0.9
+       },
+       "bagging_fraction": {
+        "low": 0.5,
+        "high": 0.9
+       },
+       "lambda_l2": {
+        "low": 1.0,
+        "high": 100.0,
+        "log": true
+       }
+      },
+      "n_trials": 20,
+      "fidelity": "low"
+     },
+     "hypothesis": "当前 lgbm 低保真实验 gap=0.0204 且带 PSI_DRIFT，说明模型复杂度偏高、对训练分布过拟合。通过收紧 num_leaves 上限、提高 min_child_samples 下限、加大 lambda_l2 正则，可在保持 AUC 的同时压低 gap，为后续全量复验通过 OVERFIT_GAP 做准备。",
+     "expected_gain": "gap 从 0.0204 降到阈值以内，AUC 维持或小幅提升，使 lgbm 成为可 promote 的稳健候选",
+     "est_cost": {
+      "tokens": 12000.0,
+      "cpu_minutes": 25.0
+     },
+     "alternatives_considered": [
+      "PROMOTE_FIDELITY(hotel_deepseek3_race_lr_scorecard)",
+      "PRUNE_FEATURES",
+      "SWITCH_MODEL"
+     ],
+     "rationale": "诊断码为 OVERFIT_GAP + NO_FINAL_MODEL，策略先验首选 PRUNE_FEATURES/TUNE/SWITCH_MODEL。当前唯一 promotable 是 lr_scorecard（AUC 0.8281 偏低且 INCONCLUSIVE），而 lgbm 的 AUC 0.841 明显更高但 gap 偏大；直接 promote lgbm 风险高（此前 e01 全量复验已因 OVERFIT_GAP 被拒）。因此先在低保真度上对 lgbm 做正则化调参，压低 gap 后再考虑升保真度，比盲目升保真度或换模型更有希望产出可接受的全量模型。"
+    }
+   }
+  },
+  {
+   "id": 372,
+   "ts": 1790612296.417414,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 2.91
+   }
+  },
+  {
+   "id": 373,
+   "ts": 1790612297.216714,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 0.8
+   }
+  },
+  {
+   "id": 374,
+   "ts": 1790612297.233084,
+   "type": "evaluated",
+   "exp_id": "hotel_deepseek3_e02",
+   "payload": {
+    "verdict": "PROMISING",
+    "codes": [],
+    "guardrail_failures": [],
+    "model": "lgbm",
+    "fidelity": "low",
+    "metrics": {
+     "valid_auc": 0.8556535998750586,
+     "oot_dev_auc": 0.8402455274313794,
+     "score_psi": 0.06902983938333496
+    },
+    "baseline": null,
+    "compare": null
+   }
+  },
+  {
+   "id": 375,
+   "ts": 1790612297.2338188,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 0.02
+   }
+  },
+  {
+   "id": 376,
+   "ts": 1790612297.23665,
+   "type": "recorded",
+   "exp_id": "hotel_deepseek3_e02",
+   "payload": {
+    "verdict": "PROMISING",
+    "codes": [],
+    "action": "TUNE"
+   }
+  },
+  {
+   "id": 377,
+   "ts": 1790612297.237092,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 378,
+   "ts": 1790612297.2379572,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "DECIDE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 379,
+   "ts": 1790612299.816301,
+   "type": "llm_call",
+   "exp_id": null,
+   "payload": {
+    "stage": "DECIDE",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "system_chars": 1996,
+    "prompt": "以下是当前上下文（JSON）。请输出决策。\n\n```json\n{\n \"mode\": \"DECIDE\",\n \"spec\": {\n  \"dataset\": \"hotel_bookings\",\n  \"label_def\": \"预订最终被取消（通常包含 No-Show），加载时用 reservation_status 校验该对应关系，校验后 reservation_status 立即剔除\",\n  \"target\": [\n   \"auc\",\n   null\n  ],\n  \"constraints\": {\n   \"interpretability\": \"none\",\n   \"max_features\": null,\n   \"banned_models\": []\n  },\n  \"autonomy\": \"L0\"\n },\n \"round_no\": 3,\n \"max_rounds\": 5,\n \"budget_remaining\": {\n  \"tokens\": 192496.0,\n  \"cpu_minutes\": 239.39474385579427,\n  \"wall_minutes\": 119.92434298197428\n },\n \"best\": null,\n \"current_node\": \"hotel_deepseek3_race_lgbm\",\n \"current_config\": {\n  \"model\": \"lgbm\",\n  \"features\": \"27 个\",\n  \"space\": null,\n  \"fidelity\": \"low\",\n  \"n_trials\": null\n },\n \"path\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  }\n ],\n \"top_k\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e02\",\n   \"action\": \"TUNE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8402,\n   \"gap\": 0.0154,\n   \"verdict\": \"PROMISING\",\n   \"codes\": []\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e01\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8325,\n   \"gap\": 0.0406,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  }\n ],\n \"recent_rejected\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_e01\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8325,\n   \"gap\": 0.0406,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  }\n ],\n \"race\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n   \"action\": \"RACE\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8281,\n   \"gap\": -0.0226,\n   \"verdict\": \"INCONCLUSIVE\",\n   \"codes\": [\n    \"PLATEAU\"\n   ]\n  }\n ],\n \"promoted\": [\n  \"hotel_deepseek3_race_lgbm\"\n ],\n \"diagnosis\": {\n  \"codes\": [\n   \"NO_FINAL_MODEL\"\n  ],\n  \"policy_prior\": {\n   \"NO_FINAL_MODEL\": [\n    \"PROMOTE_FIDELITY\"\n   ]\n  }\n },\n \"final_model\": {\n  \"exists\": false,\n  \"promotable\": [\n   {\n    \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n    \"model\": \"lr_scorecard\",\n    \"verdict\": \"INCONCLUSIVE\",\n    \"oot_dev_auc\": 0.8281,\n    \"gap\": -0.0226\n   },\n   {\n    \"exp_id\": \"hotel_deepseek3_e02\",\n    \"model\": \"lgbm\",\n    \"verdict\": \"PROMISING\",\n    \"oot_dev_auc\": 0.8402,\n    \"gap\": 0.0154\n   }\n  ],\n  \"rounds_left\": 3,\n  \"rule\": \"只有全保真度（full）实验能被 ACCEPT 成为最终模型；PROMOTE_FIDELITY 把 promotable 里的低保真实验在全量数据上复验。全量复验同样要过 OVERFIT_GAP（gap = valid − OOT-dev 超过阈值即拒），选谁时要同时看 AUC 和 gap\"\n },\n \"unhandled_leaks\": {},\n \"oot_dev\": {\n  \"used\": 1,\n  \"max\": 30,\n  \"next_alpha\": 0.0295\n },\n \"taboo_count\": 4,\n \"models_available\": [\n  \"lgbm\",\n  \"lr_scorecard\"\n ],\n \"templates\": [],\n \"tunable\": {\n  \"learning_rate\": {\n   \"low\": 0.01,\n   \"high\": 0.2,\n   \"log\": true\n  },\n  \"num_leaves\": {\n   \"low\": 8,\n   \"high\": 128,\n   \"type\": \"int\",\n   \"log\": true\n  },\n  \"min_child_samples\": {\n   \"low\": 20,\n   \"high\": 500,\n   \"type\": \"int\",\n   \"log\": true\n  },\n  \"feature_fraction\": {\n   \"low\": 0.5,\n   \"high\": 1.0\n  },\n  \"bagging_fraction\": {\n   \"low\": 0.5,\n   \"high\": 1.0\n  },\n  \"lambda_l2\": {\n   \"low\": 0.001,\n   \"high\": 100.0,\n   \"log\": true\n  }\n },\n \"monotone\": {\n  \"on\": false,\n  \"supported\": true,\n  \"rule\": \"TUNE 带 monotone:true 后，若 AUC 不显著变差且分数 PSI 更优则保留；方向来自领域先验，没有先验的特征不加约束\"\n },\n \"fidelity_options\": {\n  \"low\": {\n   \"sample_frac\": 0.5,\n   \"n_trials\": 20\n  },\n  \"full\": {\n   \"sample_frac\": 1.0,\n   \"n_trials\": 10\n  }\n },\n \"directions\": [\n  {\n   \"direction\": \"基于 arrival_date 与 lead_time 构造时间衍生特征（预订提前期分箱、到达月份/星期、季节、节假日邻近度），并做目标编码\",\n   \"rationale\": \"规格已明确 observation_time_col = arrival_date - lead_time，说明时间信息是核心信号；原始 27 特征中时间字段多为原始日期/数值，未充分表达季节性、提前期非线性与周期性，衍生后能显著提升树模型对取消行为的刻画能力，且成本低、可解释性无约束\",\n   \"expected_gain\": \"AUC 提升潜力较大，特征表达更充分\"\n  },\n  {\n   \"direction\": \"对高基数类别特征（country、agent、market_segment、distribution_channel 等）做频次编码/目标编码与稀有类别归并\",\n   \"rationale\": \"酒店预订数据中渠道与代理是取消行为的关键驱动，原始 one-hot 会维度爆炸且稀疏；频次与目标编码能在有限特征预算下保留信息，降低过拟合，成本可控\",\n   \"expected_gain\": \"中等偏高的 AUC 提升，尤其对渠道相关取消模式\"\n  },\n  {\n   \"direction\": \"构造预订行为聚合特征（同客户/同代理历史取消率、历史预订量、lead_time 相对分位），并严格按 observation_time 做时间切分防泄漏\",\n   \"rationale\": \"取消具有强个体/渠道惯性，历史行为聚合能捕捉静态特征无法表达的动态风险；但需按观察时点做时序聚合以避免未来信息泄漏，实现成本中等\",\n   \"expected_gain\": \"中等 AUC 提升，风险在于泄漏控制不当\"\n  },\n  {\n   \"direction\": \"在现有特征上做缺失值语义化处理（如 agent/company 缺失代表直客/无代理）与异常值截断，并对比缺失指示特征\",\n   \"rationale\": \"hotel_bookings 中 agent、company、country 缺失并非随机，缺失本身携带渠道信息；显式建模缺失语义成本极低，可作为基线增强，为后续特征工程提供干净输入\",\n   \"expected_gain\": \"小幅但稳定的 AUC 提升，成本最低\"\n  }\n ],\n \"memory\": null,\n \"investigations\": {}\n}\n```\n",
+    "latency_s": 2.575,
+    "tokens": 3498,
+    "response": "```json\n{\n  \"action\": \"PROMOTE_FIDELITY\",\n  \"params\": {\"exp_id\": \"hotel_deepseek3_e02\"},\n  \"hypothesis\": \"e02 是当前 promotable 中 AUC 最高（0.8402）且 gap 最小（0.0154）的 lgbm 低保真实验，全量复验最有可能同时通过 OVERFIT_GAP 并成为最终模型；而 e01 的 lgbm 全量复验已因 gap=0.0406 被拒，说明该配置族在全量下过拟合严重，换用 gap 更小的 e02 比反复升 e01 更有希望。\",\n  \"expected_gain\": \"获得一个通过 OVERFIT_GAP 的全保真 lgbm 最终模型，AUC 约 0.83-0.84\",\n  \"est_cost\": {\"tokens\": 30000, \"cpu_minutes\": 40},\n  \"alternatives_considered\": [\n    \"PROMOTE_FIDELITY hotel_deepseek3_race_lr_scorecard（gap 为负更稳但 AUC 仅 0.8281，且 verdict INCONCLUSIVE/PLATEAU）\",\n    \"TUNE lgbm 继续低保真调参（但 final_model 仍不存在，rounds_left=3 需优先产出全保真模型）\",\n    \"EXPAND_FEATURES 时间衍生特征（templates 为空，需走 run_code 逃生通道，成本高且需人工批准）\"\n  ],\n  \"rationale\": \"diagnosis 为 NO_FINAL_MODEL，策略先验即 PROMOTE_FIDELITY，且 final_model.exists=false、rounds_left=3，必须尽快产出全保真模型。promotable 中 e02 的 AUC(0.8402) 高于 lr_scorecard(0.8281)，gap(0.0154) 也远小于已被拒的 e01(0.0406)，是当前最稳的候选；lr_scorecard 虽 gap 为负但 AUC 偏低且判定为 PLATEAU，故优先升 e02。\"\n}\n```"
+   }
+  },
+  {
+   "id": 380,
+   "ts": 1790612299.820794,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "decision": {
+     "action": "PROMOTE_FIDELITY",
+     "params": {
+      "exp_id": "hotel_deepseek3_e02"
+     },
+     "hypothesis": "e02 是当前 promotable 中 AUC 最高（0.8402）且 gap 最小（0.0154）的 lgbm 低保真实验，全量复验最有可能同时通过 OVERFIT_GAP 并成为最终模型；而 e01 的 lgbm 全量复验已因 gap=0.0406 被拒，说明该配置族在全量下过拟合严重，换用 gap 更小的 e02 比反复升 e01 更有希望。",
+     "expected_gain": "获得一个通过 OVERFIT_GAP 的全保真 lgbm 最终模型，AUC 约 0.83-0.84",
+     "est_cost": {
+      "tokens": 30000.0,
+      "cpu_minutes": 40.0
+     },
+     "alternatives_considered": [
+      "PROMOTE_FIDELITY hotel_deepseek3_race_lr_scorecard（gap 为负更稳但 AUC 仅 0.8281，且 verdict INCONCLUSIVE/PLATEAU）",
+      "TUNE lgbm 继续低保真调参（但 final_model 仍不存在，rounds_left=3 需优先产出全保真模型）",
+      "EXPAND_FEATURES 时间衍生特征（templates 为空，需走 run_code 逃生通道，成本高且需人工批准）"
+     ],
+     "rationale": "diagnosis 为 NO_FINAL_MODEL，策略先验即 PROMOTE_FIDELITY，且 final_model.exists=false、rounds_left=3，必须尽快产出全保真模型。promotable 中 e02 的 AUC(0.8402) 高于 lr_scorecard(0.8281)，gap(0.0154) 也远小于已被拒的 e01(0.0406)，是当前最稳的候选；lr_scorecard 虽 gap 为负但 AUC 偏低且判定为 PLATEAU，故优先升 e02。"
+    }
+   }
+  },
+  {
+   "id": 381,
+   "ts": 1790612299.822835,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 2.58
+   }
+  },
+  {
+   "id": 382,
+   "ts": 1790612301.428805,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 1.6
+   }
+  },
+  {
+   "id": 383,
+   "ts": 1790612301.4450948,
+   "type": "evaluated",
+   "exp_id": "hotel_deepseek3_e03",
+   "payload": {
+    "verdict": "REJECT",
+    "codes": [
+     "OVERFIT_GAP"
+    ],
+    "guardrail_failures": [
+     "OVERFIT_GAP"
+    ],
+    "model": "lgbm",
+    "fidelity": "full",
+    "metrics": {
+     "valid_auc": 0.8720780099348628,
+     "oot_dev_auc": 0.8351474738842473,
+     "score_psi": 0.0514995639225234
+    },
+    "baseline": null,
+    "compare": null
+   }
+  },
+  {
+   "id": 384,
+   "ts": 1790612301.44573,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 0.02
+   }
+  },
+  {
+   "id": 385,
+   "ts": 1790612301.446889,
+   "type": "recorded",
+   "exp_id": "hotel_deepseek3_e03",
+   "payload": {
+    "verdict": "REJECT",
+    "codes": [
+     "OVERFIT_GAP"
+    ],
+    "action": "PROMOTE_FIDELITY"
+   }
+  },
+  {
+   "id": 386,
+   "ts": 1790612301.447293,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 387,
+   "ts": 1790612301.448121,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "DECIDE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 388,
+   "ts": 1790612303.9702778,
+   "type": "llm_call",
+   "exp_id": null,
+   "payload": {
+    "stage": "DECIDE",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "system_chars": 1996,
+    "prompt": "以下是当前上下文（JSON）。请输出决策。\n\n```json\n{\n \"mode\": \"DECIDE\",\n \"spec\": {\n  \"dataset\": \"hotel_bookings\",\n  \"label_def\": \"预订最终被取消（通常包含 No-Show），加载时用 reservation_status 校验该对应关系，校验后 reservation_status 立即剔除\",\n  \"target\": [\n   \"auc\",\n   null\n  ],\n  \"constraints\": {\n   \"interpretability\": \"none\",\n   \"max_features\": null,\n   \"banned_models\": []\n  },\n  \"autonomy\": \"L0\"\n },\n \"round_no\": 4,\n \"max_rounds\": 5,\n \"budget_remaining\": {\n  \"tokens\": 188998.0,\n  \"cpu_minutes\": 239.18530104955036,\n  \"wall_minutes\": 119.8981626311938\n },\n \"best\": null,\n \"current_node\": \"hotel_deepseek3_race_lgbm\",\n \"current_config\": {\n  \"model\": \"lgbm\",\n  \"features\": \"27 个\",\n  \"space\": null,\n  \"fidelity\": \"low\",\n  \"n_trials\": null\n },\n \"path\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  }\n ],\n \"top_k\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e02\",\n   \"action\": \"TUNE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8402,\n   \"gap\": 0.0154,\n   \"verdict\": \"PROMISING\",\n   \"codes\": []\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e03\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8351,\n   \"gap\": 0.0369,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  }\n ],\n \"recent_rejected\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_e01\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8325,\n   \"gap\": 0.0406,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e03\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8351,\n   \"gap\": 0.0369,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  }\n ],\n \"race\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n   \"action\": \"RACE\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8281,\n   \"gap\": -0.0226,\n   \"verdict\": \"INCONCLUSIVE\",\n   \"codes\": [\n    \"PLATEAU\"\n   ]\n  }\n ],\n \"promoted\": [\n  \"hotel_deepseek3_race_lgbm\",\n  \"hotel_deepseek3_e02\"\n ],\n \"diagnosis\": {\n  \"codes\": [\n   \"OVERFIT_GAP\",\n   \"NO_FINAL_MODEL\"\n  ],\n  \"policy_prior\": {\n   \"OVERFIT_GAP\": [\n    \"PRUNE_FEATURES\",\n    \"TUNE\",\n    \"SWITCH_MODEL\"\n   ],\n   \"NO_FINAL_MODEL\": [\n    \"PROMOTE_FIDELITY\"\n   ]\n  }\n },\n \"final_model\": {\n  \"exists\": false,\n  \"promotable\": [\n   {\n    \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n    \"model\": \"lr_scorecard\",\n    \"verdict\": \"INCONCLUSIVE\",\n    \"oot_dev_auc\": 0.8281,\n    \"gap\": -0.0226\n   }\n  ],\n  \"rounds_left\": 2,\n  \"rule\": \"只有全保真度（full）实验能被 ACCEPT 成为最终模型；PROMOTE_FIDELITY 把 promotable 里的低保真实验在全量数据上复验。全量复验同样要过 OVERFIT_GAP（gap = valid − OOT-dev 超过阈值即拒），选谁时要同时看 AUC 和 gap\"\n },\n \"unhandled_leaks\": {},\n \"oot_dev\": {\n  \"used\": 1,\n  \"max\": 30,\n  \"next_alpha\": 0.0295\n },\n \"taboo_count\": 5,\n \"models_available\": [\n  \"lgbm\",\n  \"lr_scorecard\"\n ],\n \"templates\": [],\n \"tunable\": {\n  \"learning_rate\": {\n   \"low\": 0.01,\n   \"high\": 0.2,\n   \"log\": true\n  },\n  \"num_leaves\": {\n   \"low\": 8,\n   \"high\": 128,\n   \"type\": \"int\",\n   \"log\": true\n  },\n  \"min_child_samples\": {\n   \"low\": 20,\n   \"high\": 500,\n   \"type\": \"int\",\n   \"log\": true\n  },\n  \"feature_fraction\": {\n   \"low\": 0.5,\n   \"high\": 1.0\n  },\n  \"bagging_fraction\": {\n   \"low\": 0.5,\n   \"high\": 1.0\n  },\n  \"lambda_l2\": {\n   \"low\": 0.001,\n   \"high\": 100.0,\n   \"log\": true\n  }\n },\n \"monotone\": {\n  \"on\": false,\n  \"supported\": true,\n  \"rule\": \"TUNE 带 monotone:true 后，若 AUC 不显著变差且分数 PSI 更优则保留；方向来自领域先验，没有先验的特征不加约束\"\n },\n \"fidelity_options\": {\n  \"low\": {\n   \"sample_frac\": 0.5,\n   \"n_trials\": 20\n  },\n  \"full\": {\n   \"sample_frac\": 1.0,\n   \"n_trials\": 10\n  }\n },\n \"directions\": [\n  {\n   \"direction\": \"基于 arrival_date 与 lead_time 构造时间衍生特征（预订提前期分箱、到达月份/星期、季节、节假日邻近度），并做目标编码\",\n   \"rationale\": \"规格已明确 observation_time_col = arrival_date - lead_time，说明时间信息是核心信号；原始 27 特征中时间字段多为原始日期/数值，未充分表达季节性、提前期非线性与周期性，衍生后能显著提升树模型对取消行为的刻画能力，且成本低、可解释性无约束\",\n   \"expected_gain\": \"AUC 提升潜力较大，特征表达更充分\"\n  },\n  {\n   \"direction\": \"对高基数类别特征（country、agent、market_segment、distribution_channel 等）做频次编码/目标编码与稀有类别归并\",\n   \"rationale\": \"酒店预订数据中渠道与代理是取消行为的关键驱动，原始 one-hot 会维度爆炸且稀疏；频次与目标编码能在有限特征预算下保留信息，降低过拟合，成本可控\",\n   \"expected_gain\": \"中等偏高的 AUC 提升，尤其对渠道相关取消模式\"\n  },\n  {\n   \"direction\": \"构造预订行为聚合特征（同客户/同代理历史取消率、历史预订量、lead_time 相对分位），并严格按 observation_time 做时间切分防泄漏\",\n   \"rationale\": \"取消具有强个体/渠道惯性，历史行为聚合能捕捉静态特征无法表达的动态风险；但需按观察时点做时序聚合以避免未来信息泄漏，实现成本中等\",\n   \"expected_gain\": \"中等 AUC 提升，风险在于泄漏控制不当\"\n  },\n  {\n   \"direction\": \"在现有特征上做缺失值语义化处理（如 agent/company 缺失代表直客/无代理）与异常值截断，并对比缺失指示特征\",\n   \"rationale\": \"hotel_bookings 中 agent、company、country 缺失并非随机，缺失本身携带渠道信息；显式建模缺失语义成本极低，可作为基线增强，为后续特征工程提供干净输入\",\n   \"expected_gain\": \"小幅但稳定的 AUC 提升，成本最低\"\n  }\n ],\n \"memory\": null,\n \"investigations\": {}\n}\n```\n",
+    "latency_s": 2.519,
+    "tokens": 3555,
+    "response": "```json\n{\n  \"action\": \"PROMOTE_FIDELITY\",\n  \"params\": {\"exp_id\": \"hotel_deepseek3_race_lr_scorecard\"},\n  \"hypothesis\": \"lgbm 两次全量复验均因 OVERFIT_GAP 被拒（gap 0.0406/0.0369），说明该模型族在当前特征下过拟合严重；lr_scorecard 低保真 gap 为负（-0.0226，valid 优于 OOT-dev），泛化更稳，全量复验更可能通过 OVERFIT_GAP 成为最终模型。\",\n  \"expected_gain\": \"获得一个通过 OVERFIT_GAP 的全保真最终模型，AUC 约 0.82-0.83，填补 final_model.exists=false 的空缺\",\n  \"est_cost\": {\"tokens\": 12000, \"cpu_minutes\": 40},\n  \"alternatives_considered\": [\n    \"PROMOTE_FIDELITY hotel_deepseek3_race_lgbm（AUC 更高但同族已两次 OVERFIT_GAP 被拒，重复升同一模型希望渺茫）\",\n    \"TUNE lgbm 加正则/单调约束（低保真再好也无法成为最终模型，rounds_left 仅 2）\",\n    \"PRUNE_FEATURES 降过拟合（需先有全保真实验验证，时间不够）\"\n  ],\n  \"rationale\": \"诊断码为 OVERFIT_GAP + NO_FINAL_MODEL，且 final_model.exists=false、rounds_left=2，必须优先产出全保真模型。lgbm 已两次全量复验被 OVERFIT_GAP 拒绝，反复升同一模型风险高；promotable 中唯一候选 lr_scorecard 低保真 gap 为负、泛化稳健，虽 AUC 略低但更可能通过 OVERFIT_GAP 判定，故偏离 policy_prior 的 PRUNE/TUNE 方向，直接升 lr_scorecard。\"\n}\n```"
+   }
+  },
+  {
+   "id": 389,
+   "ts": 1790612303.97262,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "decision": {
+     "action": "PROMOTE_FIDELITY",
+     "params": {
+      "exp_id": "hotel_deepseek3_race_lr_scorecard"
+     },
+     "hypothesis": "lgbm 两次全量复验均因 OVERFIT_GAP 被拒（gap 0.0406/0.0369），说明该模型族在当前特征下过拟合严重；lr_scorecard 低保真 gap 为负（-0.0226，valid 优于 OOT-dev），泛化更稳，全量复验更可能通过 OVERFIT_GAP 成为最终模型。",
+     "expected_gain": "获得一个通过 OVERFIT_GAP 的全保真最终模型，AUC 约 0.82-0.83，填补 final_model.exists=false 的空缺",
+     "est_cost": {
+      "tokens": 12000.0,
+      "cpu_minutes": 40.0
+     },
+     "alternatives_considered": [
+      "PROMOTE_FIDELITY hotel_deepseek3_race_lgbm（AUC 更高但同族已两次 OVERFIT_GAP 被拒，重复升同一模型希望渺茫）",
+      "TUNE lgbm 加正则/单调约束（低保真再好也无法成为最终模型，rounds_left 仅 2）",
+      "PRUNE_FEATURES 降过拟合（需先有全保真实验验证，时间不够）"
+     ],
+     "rationale": "诊断码为 OVERFIT_GAP + NO_FINAL_MODEL，且 final_model.exists=false、rounds_left=2，必须优先产出全保真模型。lgbm 已两次全量复验被 OVERFIT_GAP 拒绝，反复升同一模型风险高；promotable 中唯一候选 lr_scorecard 低保真 gap 为负、泛化稳健，虽 AUC 略低但更可能通过 OVERFIT_GAP 判定，故偏离 policy_prior 的 PRUNE/TUNE 方向，直接升 lr_scorecard。"
+    }
+   }
+  },
+  {
+   "id": 390,
+   "ts": 1790612303.9737542,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "EXECUTE",
+    "sec": 2.52
+   }
+  },
+  {
+   "id": 391,
+   "ts": 1790612304.877676,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EXECUTE",
+    "to": "EVALUATE",
+    "sec": 0.9
+   }
+  },
+  {
+   "id": 392,
+   "ts": 1790612304.901255,
+   "type": "evaluated",
+   "exp_id": "hotel_deepseek3_e04",
+   "payload": {
+    "verdict": "ACCEPT",
+    "codes": [],
+    "guardrail_failures": [],
+    "model": "lr_scorecard",
+    "fidelity": "full",
+    "metrics": {
+     "valid_auc": 0.8215899646287956,
+     "oot_dev_auc": 0.8162058224915947,
+     "score_psi": 0.051106971808399175
+    },
+    "baseline": null,
+    "compare": null
+   }
+  },
+  {
+   "id": 393,
+   "ts": 1790612304.901834,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "EVALUATE",
+    "to": "RECORD",
+    "sec": 0.02
+   }
+  },
+  {
+   "id": 394,
+   "ts": 1790612304.904383,
+   "type": "recorded",
+   "exp_id": "hotel_deepseek3_e04",
+   "payload": {
+    "verdict": "ACCEPT",
+    "codes": [],
+    "action": "PROMOTE_FIDELITY"
+   }
+  },
+  {
+   "id": 395,
+   "ts": 1790612304.9048388,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "RECORD",
+    "to": "STOP_CHECK",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 396,
+   "ts": 1790612304.905729,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "STOP_CHECK",
+    "to": "DECIDE",
+    "sec": 0.0
+   }
+  },
+  {
+   "id": 397,
+   "ts": 1790612308.5307589,
+   "type": "llm_call",
+   "exp_id": null,
+   "payload": {
+    "stage": "DECIDE",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "system_chars": 1996,
+    "prompt": "以下是当前上下文（JSON）。请输出决策。\n\n```json\n{\n \"mode\": \"DECIDE\",\n \"spec\": {\n  \"dataset\": \"hotel_bookings\",\n  \"label_def\": \"预订最终被取消（通常包含 No-Show），加载时用 reservation_status 校验该对应关系，校验后 reservation_status 立即剔除\",\n  \"target\": [\n   \"auc\",\n   null\n  ],\n  \"constraints\": {\n   \"interpretability\": \"none\",\n   \"max_features\": null,\n   \"banned_models\": []\n  },\n  \"autonomy\": \"L0\"\n },\n \"round_no\": 5,\n \"max_rounds\": 5,\n \"budget_remaining\": {\n  \"tokens\": 185443.0,\n  \"cpu_minutes\": 239.0682196935018,\n  \"wall_minutes\": 119.88352746168772\n },\n \"best\": {\n  \"exp_id\": \"hotel_deepseek3_e04\",\n  \"action\": \"PROMOTE_FIDELITY\",\n  \"model\": \"lr_scorecard\",\n  \"fidelity\": \"full\",\n  \"oot_dev_auc\": 0.8162,\n  \"gap\": 0.0054,\n  \"verdict\": \"ACCEPT\",\n  \"codes\": []\n },\n \"current_node\": \"hotel_deepseek3_e04\",\n \"current_config\": {\n  \"model\": \"lr_scorecard\",\n  \"features\": \"27 个\",\n  \"space\": null,\n  \"fidelity\": \"full\",\n  \"n_trials\": null\n },\n \"path\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n   \"action\": \"RACE\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8281,\n   \"gap\": -0.0226,\n   \"verdict\": \"INCONCLUSIVE\",\n   \"codes\": [\n    \"PLATEAU\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e04\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8162,\n   \"gap\": 0.0054,\n   \"verdict\": \"ACCEPT\",\n   \"codes\": []\n  }\n ],\n \"top_k\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e02\",\n   \"action\": \"TUNE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8402,\n   \"gap\": 0.0154,\n   \"verdict\": \"PROMISING\",\n   \"codes\": []\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e03\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8351,\n   \"gap\": 0.0369,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  }\n ],\n \"recent_rejected\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_e01\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8325,\n   \"gap\": 0.0406,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_e03\",\n   \"action\": \"PROMOTE_FIDELITY\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"full\",\n   \"oot_dev_auc\": 0.8351,\n   \"gap\": 0.0369,\n   \"verdict\": \"REJECT\",\n   \"codes\": [\n    \"OVERFIT_GAP\"\n   ]\n  }\n ],\n \"race\": [\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lgbm\",\n   \"action\": \"RACE\",\n   \"model\": \"lgbm\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.841,\n   \"gap\": 0.0204,\n   \"verdict\": \"PROMISING\",\n   \"codes\": [\n    \"PSI_DRIFT\"\n   ]\n  },\n  {\n   \"exp_id\": \"hotel_deepseek3_race_lr_scorecard\",\n   \"action\": \"RACE\",\n   \"model\": \"lr_scorecard\",\n   \"fidelity\": \"low\",\n   \"oot_dev_auc\": 0.8281,\n   \"gap\": -0.0226,\n   \"verdict\": \"INCONCLUSIVE\",\n   \"codes\": [\n    \"PLATEAU\"\n   ]\n  }\n ],\n \"promoted\": [\n  \"hotel_deepseek3_race_lgbm\",\n  \"hotel_deepseek3_e02\",\n  \"hotel_deepseek3_race_lr_scorecard\"\n ],\n \"diagnosis\": {\n  \"codes\": [],\n  \"policy_prior\": {}\n },\n \"final_model\": {\n  \"exists\": true,\n  \"promotable\": [],\n  \"rounds_left\": 1,\n  \"rule\": \"只有全保真度（full）实验能被 ACCEPT 成为最终模型；PROMOTE_FIDELITY 把 promotable 里的低保真实验在全量数据上复验。全量复验同样要过 OVERFIT_GAP（gap = valid − OOT-dev 超过阈值即拒），选谁时要同时看 AUC 和 gap\"\n },\n \"unhandled_leaks\": {},\n \"oot_dev\": {\n  \"used\": 1,\n  \"max\": 30,\n  \"next_alpha\": 0.0295\n },\n \"taboo_count\": 6,\n \"models_available\": [\n  \"lgbm\",\n  \"lr_scorecard\"\n ],\n \"templates\": [],\n \"tunable\": {\n  \"C\": {\n   \"low\": 0.001,\n   \"high\": 10.0,\n   \"log\": true\n  },\n  \"n_bins\": {\n   \"low\": 5,\n   \"high\": 20,\n   \"type\": \"int\"\n  }\n },\n \"monotone\": {\n  \"on\": false,\n  \"supported\": false,\n  \"rule\": \"TUNE 带 monotone:true 后，若 AUC 不显著变差且分数 PSI 更优则保留；方向来自领域先验，没有先验的特征不加约束\"\n },\n \"fidelity_options\": {\n  \"low\": {\n   \"sample_frac\": 0.5,\n   \"n_trials\": 20\n  },\n  \"full\": {\n   \"sample_frac\": 1.0,\n   \"n_trials\": 10\n  }\n },\n \"directions\": [\n  {\n   \"direction\": \"基于 arrival_date 与 lead_time 构造时间衍生特征（预订提前期分箱、到达月份/星期、季节、节假日邻近度），并做目标编码\",\n   \"rationale\": \"规格已明确 observation_time_col = arrival_date - lead_time，说明时间信息是核心信号；原始 27 特征中时间字段多为原始日期/数值，未充分表达季节性、提前期非线性与周期性，衍生后能显著提升树模型对取消行为的刻画能力，且成本低、可解释性无约束\",\n   \"expected_gain\": \"AUC 提升潜力较大，特征表达更充分\"\n  },\n  {\n   \"direction\": \"对高基数类别特征（country、agent、market_segment、distribution_channel 等）做频次编码/目标编码与稀有类别归并\",\n   \"rationale\": \"酒店预订数据中渠道与代理是取消行为的关键驱动，原始 one-hot 会维度爆炸且稀疏；频次与目标编码能在有限特征预算下保留信息，降低过拟合，成本可控\",\n   \"expected_gain\": \"中等偏高的 AUC 提升，尤其对渠道相关取消模式\"\n  },\n  {\n   \"direction\": \"构造预订行为聚合特征（同客户/同代理历史取消率、历史预订量、lead_time 相对分位），并严格按 observation_time 做时间切分防泄漏\",\n   \"rationale\": \"取消具有强个体/渠道惯性，历史行为聚合能捕捉静态特征无法表达的动态风险；但需按观察时点做时序聚合以避免未来信息泄漏，实现成本中等\",\n   \"expected_gain\": \"中等 AUC 提升，风险在于泄漏控制不当\"\n  },\n  {\n   \"direction\": \"在现有特征上做缺失值语义化处理（如 agent/company 缺失代表直客/无代理）与异常值截断，并对比缺失指示特征\",\n   \"rationale\": \"hotel_bookings 中 agent、company、country 缺失并非随机，缺失本身携带渠道信息；显式建模缺失语义成本极低，可作为基线增强，为后续特征工程提供干净输入\",\n   \"expected_gain\": \"小幅但稳定的 AUC 提升，成本最低\"\n  }\n ],\n \"memory\": null,\n \"investigations\": {}\n}\n```\n",
+    "latency_s": 3.619,
+    "tokens": 3680,
+    "response": "```json\n{\n  \"action\": \"STOP\",\n  \"params\": {\n    \"reason\": \"已存在被 ACCEPT 的全保真最终模型 hotel_deepseek3_e04 (lr_scorecard, oot_dev_auc=0.8162, gap=0.0054)，final_model.exists=true 且 promotable 为空。剩余 1 轮内唯一可提升路径是 lgbm 全保真复验，但 lgbm 两次全保真复验（e01 gap=0.0406、e03 gap=0.0369）均因 OVERFIT_GAP 被拒，低保真 lgbm 的 gap 也达 0.0204，全量复验大概率再次超阈值；而 lr_scorecard 已 ACCEPT，无更高保真可升。继续投入的期望价值低于成本。\"\n  },\n  \"hypothesis\": \"在剩余 1 轮、promotable 为空、lgbm 全保真复验已被两次 OVERFIT_GAP 拒绝的情况下，任何新动作都难以产出优于现有 ACCEPT 模型且能通过 OVERFIT_GAP 的最终模型。\",\n  \"expected_gain\": \"无（避免在低期望方向上浪费预算）\",\n  \"est_cost\": {\n    \"tokens\": 0,\n    \"cpu_minutes\": 0\n  },\n  \"alternatives_considered\": [\n    \"PROMOTE_FIDELITY(hotel_deepseek3_race_lgbm) 或 e02：lgbm 全保真复验已两次因 OVERFIT_GAP 被拒，gap 0.0369/0.0406 远超阈值，重复升级同一模型希望渺茫\",\n    \"TUNE(lgbm, low) 再调参后升级：仅剩 1 轮，无法完成 调参→低保真→全保真复验 的完整链路\",\n    \"EXPAND_FEATURES：templates 为空，只能走 run_code 逃生通道，产出必被标记 LEAK_SUSPECT 且需 ESCALATE_HUMAN 批准，1 轮内无法落地为最终模型\",\n    \"SWITCH_MODEL：zoo 仅 lgbm 与 lr_scorecard，lr_scorecard 已是最终模型，lgbm 复验不稳，无更优选择\"\n  ],\n  \"rationale\": \"final_model.exists=true 且已 ACCEPT，promotable 为空，剩余仅 1 轮。唯一潜在提升方向 lgbm 的全保真复验已被两次 OVERFIT_GAP 明确拒绝（gap 0.0369、0.0406），低保真 gap 亦达 0.0204，全量复验再次超阈值的概率极高；而 lr_scorecard 已无更高保真可升。在 1 轮预算内无法完成任何能产出更稳最终模型的完整链路，继续投入期望价值低于成本，故选择 STOP 保留已 ACCEPT 的最终模型。\"\n}\n```"
+   }
+  },
+  {
+   "id": 398,
+   "ts": 1790612308.536814,
+   "type": "decision",
+   "exp_id": null,
+   "payload": {
+    "attempt": 0,
+    "decision": {
+     "action": "STOP",
+     "params": {
+      "reason": "已存在被 ACCEPT 的全保真最终模型 hotel_deepseek3_e04 (lr_scorecard, oot_dev_auc=0.8162, gap=0.0054)，final_model.exists=true 且 promotable 为空。剩余 1 轮内唯一可提升路径是 lgbm 全保真复验，但 lgbm 两次全保真复验（e01 gap=0.0406、e03 gap=0.0369）均因 OVERFIT_GAP 被拒，低保真 lgbm 的 gap 也达 0.0204，全量复验大概率再次超阈值；而 lr_scorecard 已 ACCEPT，无更高保真可升。继续投入的期望价值低于成本。"
+     },
+     "hypothesis": "在剩余 1 轮、promotable 为空、lgbm 全保真复验已被两次 OVERFIT_GAP 拒绝的情况下，任何新动作都难以产出优于现有 ACCEPT 模型且能通过 OVERFIT_GAP 的最终模型。",
+     "expected_gain": "无（避免在低期望方向上浪费预算）",
+     "est_cost": {
+      "tokens": 0.0,
+      "cpu_minutes": 0.0
+     },
+     "alternatives_considered": [
+      "PROMOTE_FIDELITY(hotel_deepseek3_race_lgbm) 或 e02：lgbm 全保真复验已两次因 OVERFIT_GAP 被拒，gap 0.0369/0.0406 远超阈值，重复升级同一模型希望渺茫",
+      "TUNE(lgbm, low) 再调参后升级：仅剩 1 轮，无法完成 调参→低保真→全保真复验 的完整链路",
+      "EXPAND_FEATURES：templates 为空，只能走 run_code 逃生通道，产出必被标记 LEAK_SUSPECT 且需 ESCALATE_HUMAN 批准，1 轮内无法落地为最终模型",
+      "SWITCH_MODEL：zoo 仅 lgbm 与 lr_scorecard，lr_scorecard 已是最终模型，lgbm 复验不稳，无更优选择"
+     ],
+     "rationale": "final_model.exists=true 且已 ACCEPT，promotable 为空，剩余仅 1 轮。唯一潜在提升方向 lgbm 的全保真复验已被两次 OVERFIT_GAP 明确拒绝（gap 0.0369、0.0406），低保真 gap 亦达 0.0204，全量复验再次超阈值的概率极高；而 lr_scorecard 已无更高保真可升。在 1 轮预算内无法完成任何能产出更稳最终模型的完整链路，继续投入期望价值低于成本，故选择 STOP 保留已 ACCEPT 的最终模型。"
+    }
+   }
+  },
+  {
+   "id": 399,
+   "ts": 1790612308.541578,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "DECIDE",
+    "to": "FINAL_GATE",
+    "sec": 3.64
+   }
+  },
+  {
+   "id": 400,
+   "ts": 1790612308.663287,
+   "type": "final_gate",
+   "exp_id": "hotel_deepseek3_e04",
+   "payload": {
+    "exp_id": "hotel_deepseek3_e04",
+    "holdout_auc": 0.7305356700659598,
+    "holdout_ks": 0.33479097724049434,
+    "oot_dev_auc": 0.8162058224915947,
+    "drop": 0.08567015242563492,
+    "overfit_to_oot_dev": true,
+    "n_holdout": 1487,
+    "holdout_bad_rate": 0.4055144586415602,
+    "holdout_monthly_auc": {
+     "2017-05": {
+      "auc": 0.7617647058823529,
+      "n": 423,
+      "bad_rate": 0.4373522458628842
+     },
+     "2017-06": {
+      "auc": 0.7479954344414325,
+      "n": 378,
+      "bad_rate": 0.4312169312169312
+     },
+     "2017-07": {
+      "auc": 0.7169661822718231,
+      "n": 356,
+      "bad_rate": 0.37359550561797755
+     },
+     "2017-08": {
+      "auc": 0.6819435687263556,
+      "n": 330,
+      "bad_rate": 0.3696969696969697
+     }
+    }
+   }
+  },
+  {
+   "id": 401,
+   "ts": 1790612308.6640131,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "FINAL_GATE",
+    "to": "REPORT",
+    "sec": 0.12
+   }
+  },
+  {
+   "id": 402,
+   "ts": 1790612310.154134,
+   "type": "llm_call",
+   "exp_id": null,
+   "payload": {
+    "stage": "REPORT",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "system_chars": 88,
+    "prompt": "```json\n{\"mode\": \"REPORT\", \"facts\": {\"dataset\": \"hotel_bookings\", \"best_exp\": \"hotel_deepseek3_e04\", \"n_experiments\": 6, \"n_accept\": 1, \"oot_used\": 1, \"stop_reason\": \"LLM_STOP: 已存在被 ACCEPT 的全保真最终模型 hotel_deepseek3_e04 (lr_scorecard, oot_dev_auc=0.8162, gap=0.0054)，final_model.exists=true 且 promotable 为空。剩余 1 轮内唯一可提升路径是 lgbm 全保真复验，但 lgbm 两次全保真复验（e01 gap=0.0406、e03 gap=0.0369）均因 OVERFIT_GAP 被拒，低保真 lgbm 的 gap 也达 0.0204，全量复验大概率再次超阈值；而 lr_scorecard 已 ACCEPT，无更高保真可升。继续投入的期望价值低于成本。\", \"model\": \"lr_scorecard\", \"oot_dev_auc\": 0.8162, \"holdout_auc\": 0.7305}}\n```",
+    "latency_s": 1.457,
+    "tokens": 494,
+    "response": "本报告基于 hotel_bookings 数据集共完成 6 组实验，其中 1 组被 ACCEPT，最终模型为 hotel_deepseek3_e04（lr_scorecard），其 oot_dev_auc 为 0.8162，gap 为 0.0054，holdout_auc 为 0.7305。实验使用了 1 次 OOT 验证。停止原因为 LLM_STOP：已存在被 ACCEPT 的全保真最终模型，且 promotable 为空。lgbm 两次全保真复验（e01 gap=0.0406、e03 gap=0.0369）均因 OVERFIT_GAP 被拒，低保真 lgbm 的 gap 也达 0.0204。"
+   }
+  },
+  {
+   "id": 403,
+   "ts": 1790612310.3461602,
+   "type": "report_built",
+   "exp_id": null,
+   "payload": {
+    "model_card": "artifacts_sample/reports/model_card_hotel_deepseek3.md",
+    "n_risks": 3,
+    "narrative": false
+   }
+  },
+  {
+   "id": 404,
+   "ts": 1790612310.346724,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "REPORT",
+    "to": "CONSOLIDATE",
+    "sec": 1.68
+   }
+  },
+  {
+   "id": 405,
+   "ts": 1790612312.2690508,
+   "type": "llm_call",
+   "exp_id": null,
+   "payload": {
+    "stage": "CONSOLIDATE",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "system_chars": 397,
+    "prompt": "```json\n{\"mode\": \"CONSOLIDATE\", \"allowed_keys\": {\"race:lgbm\": [\"hotel_deepseek3_race_lgbm\"], \"race:lr_scorecard\": [\"hotel_deepseek3_race_lr_scorecard\"], \"promote:lgbm\": [\"hotel_deepseek3_e01\", \"hotel_deepseek3_e03\"], \"tune:lgbm:bagging_fraction,feature_fraction,lambda_l2,learning_rate,min_child_samples,num_leaves@low\": [\"hotel_deepseek3_e02\"], \"promote:lr_scorecard\": [\"hotel_deepseek3_e04\"]}, \"verdicts\": {\"hotel_deepseek3_race_lgbm\": \"PROMISING\", \"hotel_deepseek3_race_lr_scorecard\": \"INCONCLUSIVE\", \"hotel_deepseek3_e01\": \"REJECT\", \"hotel_deepseek3_e02\": \"PROMISING\", \"hotel_deepseek3_e03\": \"REJECT\", \"hotel_deepseek3_e04\": \"ACCEPT\"}, \"experiments\": [{\"exp_id\": \"hotel_deepseek3_race_lgbm\", \"action\": \"RACE\", \"model\": \"lgbm\", \"verdict\": \"PROMISING\", \"codes\": [\"PSI_DRIFT\"]}, {\"exp_id\": \"hotel_deepseek3_race_lr_scorecard\", \"action\": \"RACE\", \"model\": \"lr_scorecard\", \"verdict\": \"INCONCLUSIVE\", \"codes\": [\"PLATEAU\"]}, {\"exp_id\": \"hotel_deepseek3_e01\", \"action\": \"PROMOTE_FIDELITY\", \"model\": \"lgbm\", \"verdict\": \"REJECT\", \"codes\": [\"OVERFIT_GAP\"]}, {\"exp_id\": \"hotel_deepseek3_e02\", \"action\": \"TUNE\", \"model\": \"lgbm\", \"verdict\": \"PROMISING\", \"codes\": []}, {\"exp_id\": \"hotel_deepseek3_e03\", \"action\": \"PROMOTE_FIDELITY\", \"model\": \"lgbm\", \"verdict\": \"REJECT\", \"codes\": [\"OVERFIT_GAP\"]}, {\"exp_id\": \"hotel_deepseek3_e04\", \"action\": \"PROMOTE_FIDELITY\", \"model\": \"lr_scorecard\", \"verdict\": \"ACCEPT\", \"codes\": []}]}\n```",
+    "latency_s": 1.921,
+    "tokens": 1082,
+    "response": "{\"lessons\": [{\"key\": \"promote:lgbm\", \"statement\": \"LightGBM 在提升保真度时容易出现过拟合间隙而被拒绝，不宜直接推进。\", \"evidence\": [\"hotel_deepseek3_e01\", \"hotel_deepseek3_e03\"], \"polarity\": \"NEGATIVE\"}, {\"key\": \"promote:lr_scorecard\", \"statement\": \"逻辑回归评分卡在提升保真度时表现稳定，可被接受。\", \"evidence\": [\"hotel_deepseek3_e04\"], \"polarity\": \"POSITIVE\"}, {\"key\": \"tune:lgbm:bagging_fraction,feature_fraction,lambda_l2,learning_rate,min_child_samples,num_leaves@low\", \"statement\": \"对 LightGBM 在低区间调参 bagging/feature fraction、lambda_l2、学习率、叶节点数等可带来有前景的改进。\", \"evidence\": [\"hotel_deepseek3_e02\"], \"polarity\": \"POSITIVE\"}, {\"key\": \"race:lgbm\", \"statement\": \"LightGBM 在竞速阶段表现出前景但伴随 PSI 漂移，需关注特征稳定性。\", \"evidence\": [\"hotel_deepseek3_race_lgbm\"], \"polarity\": \"POSITIVE\"}, {\"key\": \"race:lr_scorecard\", \"statement\": \"逻辑回归评分卡在竞速阶段出现平台期，结果不确定。\", \"evidence\": [\"hotel_deepseek3_race_lr_scorecard\"], \"polarity\": \"NEGATIVE\"}]}"
+   }
+  },
+  {
+   "id": 406,
+   "ts": 1790612312.321673,
+   "type": "consolidated",
+   "exp_id": null,
+   "payload": {
+    "proposed": 5,
+    "admitted": 5,
+    "dropped": [],
+    "lifecycle_changes": {}
+   }
+  },
+  {
+   "id": 407,
+   "ts": 1790612312.3223948,
+   "type": "state_transition",
+   "exp_id": null,
+   "payload": {
+    "from": "CONSOLIDATE",
+    "to": "DONE",
+    "sec": 1.97
+   }
+  }
+ ],
+ "records": [
+  {
+   "exp_id": "hotel_deepseek3_race_lgbm",
+   "task_id": "hotel_deepseek3",
+   "parent_exp_id": null,
+   "hypothesis": "模型赛跑：lgbm",
+   "action_type": "RACE",
+   "diff": {
+    "model": "lgbm"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "hotel",
+     "lead_time",
+     "arrival_date_month",
+     "arrival_date_week_number",
+     "arrival_date_day_of_month",
+     "stays_in_weekend_nights",
+     "stays_in_week_nights",
+     "adults",
+     "children",
+     "babies",
+     "meal",
+     "market_segment",
+     "distribution_channel",
+     "is_repeated_guest",
+     "previous_cancellations",
+     "previous_bookings_not_canceled",
+     "reserved_room_type",
+     "deposit_type",
+     "agent",
+     "company",
+     "customer_type",
+     "total_nights",
+     "total_guests",
+     "has_kids",
+     "weekend_share",
+     "cancel_history_ratio",
+     "booking_month"
+    ],
+    "space": null,
+    "fidelity": "low",
+    "n_trials": null
+   },
+   "config_hash": "81603286fede",
+   "fidelity": "low",
+   "metrics": {
+    "train_auc": 0.870308803092755,
+    "valid_auc": 0.8614399500234267,
+    "oot_dev_auc": 0.8410495215391709,
+    "oot_dev_ks": 0.5144072370714374,
+    "gap": 0.020390428484255763,
+    "score_psi": 0.16495299091741827
+   },
+   "diagnosis_codes": [
+    "PSI_DRIFT"
+   ],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.16979570388793946,
+    "wall_minutes": 0.021224462985992433
+   },
+   "verdict": "PROMISING",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/hotel_deepseek3_race_lgbm/result.json"
+   }
+  },
+  {
+   "exp_id": "hotel_deepseek3_race_lr_scorecard",
+   "task_id": "hotel_deepseek3",
+   "parent_exp_id": null,
+   "hypothesis": "模型赛跑：lr_scorecard",
+   "action_type": "RACE",
+   "diff": {
+    "model": "lr_scorecard"
+   },
+   "config": {
+    "model": "lr_scorecard",
+    "features": [
+     "hotel",
+     "lead_time",
+     "arrival_date_month",
+     "arrival_date_week_number",
+     "arrival_date_day_of_month",
+     "stays_in_weekend_nights",
+     "stays_in_week_nights",
+     "adults",
+     "children",
+     "babies",
+     "meal",
+     "market_segment",
+     "distribution_channel",
+     "is_repeated_guest",
+     "previous_cancellations",
+     "previous_bookings_not_canceled",
+     "reserved_room_type",
+     "deposit_type",
+     "agent",
+     "company",
+     "customer_type",
+     "total_nights",
+     "total_guests",
+     "has_kids",
+     "weekend_share",
+     "cancel_history_ratio",
+     "booking_month"
+    ],
+    "space": null,
+    "fidelity": "low",
+    "n_trials": null
+   },
+   "config_hash": "77f223697e87",
+   "fidelity": "low",
+   "metrics": {
+    "train_auc": 0.7932290867002869,
+    "valid_auc": 0.8054583788848977,
+    "oot_dev_auc": 0.8280591132451001,
+    "oot_dev_ks": 0.49782977814260493,
+    "gap": -0.02260073436020238,
+    "score_psi": 0.07427530430518399
+   },
+   "diagnosis_codes": [
+    "PLATEAU"
+   ],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.17418575286865234,
+    "wall_minutes": 0.021773219108581543
+   },
+   "verdict": "INCONCLUSIVE",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/hotel_deepseek3_race_lr_scorecard/result.json"
+   }
+  },
+  {
+   "exp_id": "hotel_deepseek3_e01",
+   "task_id": "hotel_deepseek3",
+   "parent_exp_id": "hotel_deepseek3_race_lgbm",
+   "hypothesis": "lgbm 低保真实验 oot_dev_auc=0.841、gap=0.0204，是当前最优且 verdict=PROMISING；全量复验有望通过 OVERFIT_GAP 并成为最终模型，解决 NO_FINAL_MODEL。",
+   "action_type": "PROMOTE_FIDELITY",
+   "diff": {
+    "exp_id": "hotel_deepseek3_race_lgbm"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "hotel",
+     "lead_time",
+     "arrival_date_month",
+     "arrival_date_week_number",
+     "arrival_date_day_of_month",
+     "stays_in_weekend_nights",
+     "stays_in_week_nights",
+     "adults",
+     "children",
+     "babies",
+     "meal",
+     "market_segment",
+     "distribution_channel",
+     "is_repeated_guest",
+     "previous_cancellations",
+     "previous_bookings_not_canceled",
+     "reserved_room_type",
+     "deposit_type",
+     "agent",
+     "company",
+     "customer_type",
+     "total_nights",
+     "total_guests",
+     "has_kids",
+     "weekend_share",
+     "cancel_history_ratio",
+     "booking_month"
+    ],
+    "space": null,
+    "fidelity": "full",
+    "n_trials": null
+   },
+   "config_hash": "218c2b78e919",
+   "fidelity": "full",
+   "metrics": {
+    "train_auc": 0.9016246734539418,
+    "valid_auc": 0.8730618319577865,
+    "oot_dev_auc": 0.8325063813518345,
+    "oot_dev_ks": 0.5232567945935613,
+    "gap": 0.040555450605952004,
+    "score_psi": 0.059270639571418905
+   },
+   "diagnosis_codes": [
+    "OVERFIT_GAP"
+   ],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.15985825856526692,
+    "wall_minutes": 0.019982282320658365
+   },
+   "verdict": "REJECT",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/hotel_deepseek3_e01/result.json"
+   }
+  },
+  {
+   "exp_id": "hotel_deepseek3_e02",
+   "task_id": "hotel_deepseek3",
+   "parent_exp_id": "hotel_deepseek3_race_lgbm",
+   "hypothesis": "当前 lgbm 低保真实验 gap=0.0204 且带 PSI_DRIFT，说明模型复杂度偏高、对训练分布过拟合。通过收紧 num_leaves 上限、提高 min_child_samples 下限、加大 lambda_l2 正则，可在保持 AUC 的同时压低 gap，为后续全量复验通过 OVERFIT_GAP 做准备。",
+   "action_type": "TUNE",
+   "diff": {
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.1,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 8,
+      "high": 64,
+      "type": "int",
+      "log": true
+     },
+     "min_child_samples": {
+      "low": 50,
+      "high": 500,
+      "type": "int",
+      "log": true
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 0.9
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 0.9
+     },
+     "lambda_l2": {
+      "low": 1.0,
+      "high": 100.0,
+      "log": true
+     }
+    },
+    "n_trials": 20,
+    "fidelity": "low"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "hotel",
+     "lead_time",
+     "arrival_date_month",
+     "arrival_date_week_number",
+     "arrival_date_day_of_month",
+     "stays_in_weekend_nights",
+     "stays_in_week_nights",
+     "adults",
+     "children",
+     "babies",
+     "meal",
+     "market_segment",
+     "distribution_channel",
+     "is_repeated_guest",
+     "previous_cancellations",
+     "previous_bookings_not_canceled",
+     "reserved_room_type",
+     "deposit_type",
+     "agent",
+     "company",
+     "customer_type",
+     "total_nights",
+     "total_guests",
+     "has_kids",
+     "weekend_share",
+     "cancel_history_ratio",
+     "booking_month"
+    ],
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.1,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 8,
+      "high": 64,
+      "type": "int",
+      "log": true
+     },
+     "min_child_samples": {
+      "low": 50,
+      "high": 500,
+      "type": "int",
+      "log": true
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 0.9
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 0.9
+     },
+     "lambda_l2": {
+      "low": 1.0,
+      "high": 100.0,
+      "log": true
+     }
+    },
+    "fidelity": "low",
+    "n_trials": 20
+   },
+   "config_hash": "807253e6a332",
+   "fidelity": "low",
+   "metrics": {
+    "train_auc": 0.8681548778999499,
+    "valid_auc": 0.8556535998750586,
+    "oot_dev_auc": 0.8402455274313794,
+    "oot_dev_ks": 0.5175894794840944,
+    "gap": 0.015408072443679255,
+    "score_psi": 0.06902983938333496
+   },
+   "diagnosis_codes": [],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.10141642888387044,
+    "wall_minutes": 0.012677053610483805
+   },
+   "verdict": "PROMISING",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/hotel_deepseek3_e02/result.json"
+   }
+  },
+  {
+   "exp_id": "hotel_deepseek3_e03",
+   "task_id": "hotel_deepseek3",
+   "parent_exp_id": "hotel_deepseek3_e02",
+   "hypothesis": "e02 是当前 promotable 中 AUC 最高（0.8402）且 gap 最小（0.0154）的 lgbm 低保真实验，全量复验最有可能同时通过 OVERFIT_GAP 并成为最终模型；而 e01 的 lgbm 全量复验已因 gap=0.0406 被拒，说明该配置族在全量下过拟合严重，换用 gap 更小的 e02 比反复升 e01 更有希望。",
+   "action_type": "PROMOTE_FIDELITY",
+   "diff": {
+    "exp_id": "hotel_deepseek3_e02"
+   },
+   "config": {
+    "model": "lgbm",
+    "features": [
+     "hotel",
+     "lead_time",
+     "arrival_date_month",
+     "arrival_date_week_number",
+     "arrival_date_day_of_month",
+     "stays_in_weekend_nights",
+     "stays_in_week_nights",
+     "adults",
+     "children",
+     "babies",
+     "meal",
+     "market_segment",
+     "distribution_channel",
+     "is_repeated_guest",
+     "previous_cancellations",
+     "previous_bookings_not_canceled",
+     "reserved_room_type",
+     "deposit_type",
+     "agent",
+     "company",
+     "customer_type",
+     "total_nights",
+     "total_guests",
+     "has_kids",
+     "weekend_share",
+     "cancel_history_ratio",
+     "booking_month"
+    ],
+    "space": {
+     "learning_rate": {
+      "low": 0.01,
+      "high": 0.1,
+      "log": true
+     },
+     "num_leaves": {
+      "low": 8,
+      "high": 64,
+      "type": "int",
+      "log": true
+     },
+     "min_child_samples": {
+      "low": 50,
+      "high": 500,
+      "type": "int",
+      "log": true
+     },
+     "feature_fraction": {
+      "low": 0.5,
+      "high": 0.9
+     },
+     "bagging_fraction": {
+      "low": 0.5,
+      "high": 0.9
+     },
+     "lambda_l2": {
+      "low": 1.0,
+      "high": 100.0,
+      "log": true
+     }
+    },
+    "fidelity": "full",
+    "n_trials": null
+   },
+   "config_hash": "dbc292c0c1af",
+   "fidelity": "full",
+   "metrics": {
+    "train_auc": 0.8867937449644766,
+    "valid_auc": 0.8720780099348628,
+    "oot_dev_auc": 0.8351474738842473,
+    "oot_dev_ks": 0.526978781302358,
+    "gap": 0.03693053605061558,
+    "score_psi": 0.0514995639225234
+   },
+   "diagnosis_codes": [
+    "OVERFIT_GAP"
+   ],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.2094428062438965,
+    "wall_minutes": 0.026180350780487062
+   },
+   "verdict": "REJECT",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/hotel_deepseek3_e03/result.json"
+   }
+  },
+  {
+   "exp_id": "hotel_deepseek3_e04",
+   "task_id": "hotel_deepseek3",
+   "parent_exp_id": "hotel_deepseek3_race_lr_scorecard",
+   "hypothesis": "lgbm 两次全量复验均因 OVERFIT_GAP 被拒（gap 0.0406/0.0369），说明该模型族在当前特征下过拟合严重；lr_scorecard 低保真 gap 为负（-0.0226，valid 优于 OOT-dev），泛化更稳，全量复验更可能通过 OVERFIT_GAP 成为最终模型。",
+   "action_type": "PROMOTE_FIDELITY",
+   "diff": {
+    "exp_id": "hotel_deepseek3_race_lr_scorecard"
+   },
+   "config": {
+    "model": "lr_scorecard",
+    "features": [
+     "hotel",
+     "lead_time",
+     "arrival_date_month",
+     "arrival_date_week_number",
+     "arrival_date_day_of_month",
+     "stays_in_weekend_nights",
+     "stays_in_week_nights",
+     "adults",
+     "children",
+     "babies",
+     "meal",
+     "market_segment",
+     "distribution_channel",
+     "is_repeated_guest",
+     "previous_cancellations",
+     "previous_bookings_not_canceled",
+     "reserved_room_type",
+     "deposit_type",
+     "agent",
+     "company",
+     "customer_type",
+     "total_nights",
+     "total_guests",
+     "has_kids",
+     "weekend_share",
+     "cancel_history_ratio",
+     "booking_month"
+    ],
+    "space": null,
+    "fidelity": "full",
+    "n_trials": null
+   },
+   "config_hash": "ada2b20bb479",
+   "fidelity": "full",
+   "metrics": {
+    "train_auc": 0.8191594033057448,
+    "valid_auc": 0.8215899646287956,
+    "oot_dev_auc": 0.8162058224915947,
+    "oot_dev_ks": 0.4561204754247675,
+    "gap": 0.0053841421372009535,
+    "score_psi": 0.051106971808399175
+   },
+   "diagnosis_codes": [],
+   "cost": {
+    "tokens": 0.0,
+    "cpu_minutes": 0.11708135604858398,
+    "wall_minutes": 0.014635169506072998
+   },
+   "verdict": "ACCEPT",
+   "invalidated": false,
+   "artifact_refs": {
+    "result": "experiments/hotel_deepseek3_e04/result.json"
+   }
+  }
+ ]
+}

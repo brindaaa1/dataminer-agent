@@ -1,109 +1,153 @@
 # DataMiner Agent
 
-在有明确、可验证 reward 的领域（这里用 OOT AUC）里，让 **LLM 负责发散和决策、确定性代码负责验证和执行** 的通用 agent 范式。主线是从原始多表数据出发、基于领域 know-how 挖掘特征，同时覆盖模型选择和调参；主场景是信贷风控（Lending Club 单表、Home Credit 多表），另用一个非金融场景（酒店预订取消）验证"换场景只换配置文件、不改一行代码"。
+DataMiner Agent 面向表格数据的自动建模：给定一张表和建模目标，agent 逐轮完成特征构造、模型比较和调参。LLM 负责提出下一步做什么以及理由；训练、指标计算和实验是否被接受，全部由代码判定。这条分工是整个设计的出发点：LLM 可以提建议，但不能决定结论。
 
-## 这是什么系统
+主要场景是信贷风控，使用 Lending Club（单表）和 Home Credit（多表）数据；另配有酒店预订取消预测，用于检验同一套流程能否迁移到其他业务。项目目前仍是研究原型，接入新数据集需要先补充字段定义、标签口径、时间规则和特征模板。
 
-- **特征由 know-how 驱动，不是 LLM 现场想象。** `knowhow/templates/` 把特征拆成"实体 × 时间窗口 × 聚合方式 × 派生方式"的模板库，LLM 在这个词表内组合或提出新假设；确定性代码负责把假设实例化成 SQL、做 point-in-time 关联、跑筛选漏斗。模板覆盖不到的假设可以走 `run_code`（LLM 直接写 Python），但产出永远先经过同一套安全检查。
-- **模型不是 LLM 直接指定的，是实验出来的。** 候选模型先用低保真度赛马，由确定性的显著性检验排名次；LLM 真正的配置权在于把领域先验注入模型——比如"违约概率随信用分单调下降"这类业务常识变成 GBDT 的单调约束——约束能不能保留仍由对照实验决定。
-- **调参分两层。** LLM（外循环）决定"下一步往哪个方向搜、要不要换模型、放大还是收紧搜索空间"；Optuna（内循环，TPE + 剪枝）在给定空间里找具体参数值。LLM 不手动给出学习率这类数值。
-- **过拟合当成每轮都会发生的默认状态处理** 每次决策后代码强制跑一遍诊断（gap 过大、单特征信号过强、分数漂移、连续无进展……），诊断码映射到候选动作作为策略先验喂给 LLM；一个实验能不能被接受，只由确定性代码基于配对 bootstrap + 逐步收紧的显著性阈值判定，LLM 的任何自我判断都会被丢弃。
+## 快速开始
 
-## 架构
-
-```
-                              Orchestrator（状态机）
-   INTAKE → CLARIFY → PROFILE → PLAN → ┌─ DECIDE → EXECUTE → EVALUATE → RECORD → STOP_CHECK ─┐ → FINAL_GATE → REPORT → CONSOLIDATE
-                                       └──────────────────── 未停止 ─────────────────────────┘
-                    LLM 只出现在 PLAN / DECIDE；输出经 pydantic 校验，失败回灌错误重试
-        ┌───────────────────┬────────────────────┬────────────────────┬────────────────────┐
-        ▼                   ▼                    ▼                    ▼                    ▼
-  特征工厂 / run_code    Optuna 内循环         Evaluator            Memory              FinalGate
-  (模板+PIT+筛选漏斗)   (TPE + 剪枝)      (guardrail诊断码 +     (Lesson生命周期 +      (唯一能读 holdout
-                                          配对bootstrap判定)      指纹检索+冷启动)        的模块，只跑一次)
-        └───────────────────┴────────────────────┴────────────────────┴────────────────────┘
-                                             ▼
-                          Data Access Layer（四段切分：train/valid/oot_dev/holdout 物理隔离）
+```bash
+git clone https://github.com/brindaaa1/dataminer-agent && cd dataminer-agent
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-## 核心设计
+需要 Python 3.10 及以上（在 3.12 上测试）。不需要账号、数据或 API key。页面顶部是仓库自带的酒店预订样本，下方提供两种查看方式：
 
-### 1. Holdout 不是靠约束 agent，而是代码层面拿不到
+- **历史回放**：按原顺序重放此前真实调用 LLM 的运行记录，不是实时运行。默认是 DeepSeek 在酒店样本上的一次运行，每一轮的假设、理由、结果和代码判定以卡片展示；打开"显示完整 trace"可查看指标图、逐轮表以及每次 LLM 调用的 prompt 和回复原文。另外三次是 Kimi 在 Lending Club 全量数据上的早期运行，只保留决策过程，原始数据不在仓库中。
+- **现场运行**：在样本上从头完整运行一次，页面随运行进度更新。默认使用按固定策略决策的 mock LLM，约十秒完成，用于演示流程本身；也可以填入自己的 DeepSeek、Anthropic 或 Kimi key 调用真实模型。key 仅在当前页面会话中使用，不写入磁盘，也不记录到日志。
 
-```python
-def issue_holdout_token() -> str:
-    caller = sys._getframe(1).f_globals.get("__name__")
-    if caller != _ALLOWED_ISSUER:          # 只有 evaluation.final_gate
-        raise HoldoutAccessError(f"{caller} 无权获取 holdout token")
-    return _SECRET
-```
+同一次 DeepSeek 运行在 Langfuse 上的 trace：[hotel_deepseek3](https://cloud.langfuse.com/project/cmulaza321a0sad0cuy2aqx0x/traces/044e763a4c2853c592c6235c24777f48)（公开，无需登录）。
 
-`DataAccess.load("holdout")` 没有这个 token 一律抛异常，agent 能调用的所有工具都构造不出它。测试直接静态扫描 `agent/`、`tools/` 目录源码，确认它们不 import `final_gate`。
+样本取自 Hotel booking demand 数据集（Antonio, Almeida & Nunes, 2019，CC BY 4.0），按到店月份和是否取消分层抽取 7,997 行。出处、许可和抽样脚本见 `data_sample/hotel_bookings/NOTICE.md`。
 
-### 2. 判卷权只属于代码，LLM 的自我判断会被原样记录、绝不采信
+演示使用酒店数据而不是主场景的信贷数据，原因如下：
 
-```python
-if fails:
-    out["verdict"] = Verdict.REJECT
-elif noninferior and not cmp["significant"]:   # 单调约束的非劣效判定：只有 evaluator 能给 ACCEPT
-    out["verdict"] = Verdict.ACCEPT
-elif cmp["significant"]:
-    out["verdict"] = Verdict.ACCEPT if cand["fidelity"] == "full" else Verdict.PROMISING
-```
+- **许可**：酒店数据随同行评审的数据论文以 CC BY 4.0 发布，署名并注明改动即可再分发。Lending Club 和 Home Credit 均来自 Kaggle，再分发条款未确认允许，因此不随仓库提供。
+- **规模和结构**：酒店数据全量不到 20 MB、单表，抽样只需删行。Lending Club 全量达 GB 级；Home Credit 有 7 张关联表，抽样需要按申请人在各表间保持一致。
+- **时间切分**：酒店数据有明确的到店日期，可以按时间切出四段，抽样后各段取消率与全量基本一致，OOT 和漂移检查照常生效。Home Credit 缺少绝对日期，只能随机切分。
+- **配置现成**：酒店数据的字段定义、泄漏字段标注和切分窗口已在 `knowhow/` 中配置好，泄漏检查消融实验也使用这份数据。
 
-`evaluate()` 的签名里专门留了 `llm_claimed_verdict` 参数——LLM 想在输出里夹带"我觉得这个应该被接受"，会被记录下来但从不参与判定。判定用的是同一批 OOT-dev 样本上的配对 bootstrap，且显著性阈值随使用次数收紧（对抗"holdout 被用坏"）。
+代价是演示展示的是跨场景迁移，而不是信贷主场景。信贷场景的运行可以在"历史回放"中查看 Lending Club 的三次 Kimi 运行，完整结果见 `examples/`。
 
-### 3. 特征的默认姿态是"不可信"，要自己挣得信任
+## 常用设置
 
-```python
-for f in [f for f in cand if metrics[f]["auc"] > thr]:
-    leak[f] = metrics[f]["auc"]     # 不直接丢弃：交给 guardrail / 人工，不进入 kept
-```
-
-筛选漏斗按 **缺失率 → IV → 单特征 AUC 报警 → 相关性去重 → PSI** 的顺序跑。`run_code` 产出的特征无论过没过这条流水线，都会被单独强制标记为可疑（可得时间不可信），必须人工批准才能进最终模型——这是"生成端放开、验证端收紧"这条主线最重的一处体现。
-
-### 4. Memory：LLM 能提出经验，不能批准经验
-
-```python
-"""LLM 只能提出候选（key 必须是代码从本任务实验树推导出的枚举键；必须引用真实 exp_id；极性必须与证据判定一致）；
-状态流转（CANDIDATE → VALIDATED → ACTIVE / DEPRECATED）全部由本文件的规则决定，LLM 无法晋升。"""
-```
-
-指纹距离超过阈值直接冷启动，不会强融不相似任务的经验——单元测试直接验证了酒店任务的经验不会污染信贷任务的记忆。
-
-## 实测发现（如实记录，包括没有得到支持的假设）
-
-| 结论 | 证据 |
+| 配置项 | 位置 |
 |---|---|
-| 关掉 guardrail，AUC 从 0.68 虚高到 1.00，上线视角（泄漏字段不可得）塌陷到 0.50 | `examples/a3_leak_demo.png` |
-| 多表特征工厂贡献 +0.015~0.02 AUC，是 AutoML 结构性做不到的部分；给 AutoML 同样特征它就追平 agent，恰好证明增量来自特征而非搜索 | `examples/feature_factory_results.json`，`docs/DESIGN_NOTES.md #4` |
-| 跨任务 Memory 的数值 warm-start **没有**加速收敛；真实 LLM 会引用历史经验改变决策，但在低复杂度任务上未必带来更好结果 | `examples/memory_demo.md`，`docs/DESIGN_NOTES.md #1` |
-| 单调约束在本来就很稳的数据上测不出可保留的稳定性收益，规则如实判定"不保留" | `examples/monotone_ablation.md`，`docs/DESIGN_NOTES.md #2` |
-| 训练中途 `kill -9`，同一条命令能从检查点恢复，不重复计算 | `examples/resume_demo.md` |
+| LLM key、Langfuse | `.env`，格式见 `.env.example`；均为可选 |
+| 使用的 LLM | `config.yaml` 的 `llm.providers`；命令行 `--llm mock / deepseek / anthropic / kimi` |
+| 最大轮数、预算 | `config.yaml` 的 `run`；命令行 `--max-rounds` |
+| 抽样试跑比例、trial 数 | `config.yaml` 的 `fidelity`；命令行 `--full-trials`。使用样本时试跑固定抽取 50%，见 `data/sample.py` |
+| 判定阈值 | `config.yaml` 的 `evaluator`（如 `gap_max: 0.03`、`leak_single_auc: 0.75`）和 `oot_budget` |
+| 人工介入 | 命令行 `--autonomy L0 / L1`：L0 无人值守；L1 在疑似泄漏等情况下暂停等待人工。演示页固定为 L0 |
+
+默认回放的 DeepSeek 运行设置：最多 5 轮，试跑抽取 50% 数据，全量训练每次 10 个 trial，L0，不读取历史经验。
+
+## 工作流程
+
+系统由状态机驱动。完成任务信息检查和数据分析后，进入"决策 → 执行 → 评估 → 记录"的循环，满足停止条件后进行最终验收、生成报告并沉淀经验。
+
+```text
+INTAKE → CLARIFY（按需）→ PROFILE → PLAN
+                                    ↓
+             DECIDE → EXECUTE → EVALUATE → RECORD → STOP_CHECK
+                ↑                                      │
+                └────────────── 继续实验 ────────────────┤
+                                                       ↓
+                                    FINAL_GATE → REPORT → CONSOLIDATE
+```
+
+LLM 只参与规划方向、每轮决策、报告叙述和候选经验整理。其输出先经过 Pydantic 和业务规则校验，不符合要求时，系统把错误原因返回给 LLM 并要求重新输出。
+
+数据分为 `train`、`valid`、`oot_dev`、`holdout` 四段。Lending Club 和酒店数据按时间窗口切分；Home Credit 缺少绝对日期，只能分层随机切分，因此其 `oot_dev` 无法验证跨时间稳定性。
+
+## 特征与模型
+
+特征构造从 `knowhow/` 中的字段定义和模板开始。模板描述实体、时间窗口、聚合方式和派生公式，特征工厂将其转换为 SQL 并按配置执行时间过滤。目前支持部分单级聚合和行级派生，多级聚合和跨表关联模板尚未全部实现。
+
+模板无法表达的计算可以通过 `run_code` 提交 Python 代码。所有特征都要经过缺失率、IV、单特征 AUC、相关性和 PSI 筛选，单特征信号过强会触发泄漏告警。`run_code` 产出的特征一律标记为"可得时间待确认"，需要人工确认后才能进入后续流程。
+
+新方向先在部分数据上**抽样试跑**（代码中为 `fidelity: low`，默认抽取 10%），结果可观时再用**全量数据复验**（`fidelity: full`）。只有全量训练的结果可以被接受并成为最终模型。调参由 Optuna 完成（TPE 与剪枝），LLM 负责选择搜索方向、是否切换模型以及搜索范围。
+
+开发中遇到过一个典型问题：DeepSeek 第一次在样本上运行时，五轮都停留在抽样试跑阶段调参，没有产出最终模型。原因有两点。一是样本规模小，抽取 10% 后只剩约四百行，诊断信号基本是噪声，因此样本上的试跑比例改为 50%。二是 LLM 没有意识到"不进行全量复验就不会有最终模型"：Kimi 在 Lending Club 上自行做到了这一点，DeepSeek 没有，这类行为本身具有随机性。为了让结果稳定，代码在"尚无最终模型、但已有可复验的试跑结果"时加入诊断码 `NO_FINAL_MODEL`，其策略先验指向全量复验；LLM 若选择其他动作，必须给出理由。
+
+业务先验也可以转为模型约束，例如为部分特征指定风险的单调方向，再通过对照实验决定是否保留。先验不默认成立，代码会先检查它与训练数据是否明显冲突。
+
+## 评估
+
+每个实验都会检查验证集与 OOT-dev 的指标差距、疑似泄漏、分数漂移、特征数量和连续无进展，诊断结果作为下一轮决策的依据返回给 LLM。
+
+候选模型与当前最优模型在同一批 OOT-dev 样本上做配对 bootstrap 比较。显著性阈值随比较次数收紧，并设有使用次数上限。这一机制用于降低反复试验带来的偶然显著风险，并不代表已经消除对 OOT-dev 的过拟合。LLM 给出的接受或拒绝意见会被记录，但不参与判定。
+
+Holdout 只在最后由 `FinalGate` 读取一次。读取需要验收模块签发的 token，结果按任务记录，正常流程无法重复评估。这属于应用层访问控制，不是操作系统级隔离。
+
+### 关于 OVERFIT_GAP 的口径
+
+当前的过拟合检查使用 AUC：验证集 AUC 与 OOT-dev AUC 之差超过 0.03 即拒绝。这里选择 AUC 仅作为示例，实际上线时只看这一个差值并不充分，还需要纳入稳定性相关指标，例如分数 PSI、分月 AUC 波动、与同期基线的对比等。
+
+酒店数据是一个反例。该数据季节性很强：验证集与训练集属于同一时期，OOT-dev 是随后的冬春季，holdout 是夏季。在样本上，lightgbm 全量训练后的差值为 0.037～0.041，两次均被拒绝。最终通过的是评分卡，但它在 holdout 上从 0.816 降至 0.731，验收将其标记为"疑似对 OOT-dev 过拟合"。全量数据上情况类似：默认 lightgbm 基线的 OOT-dev、holdout AUC 为 0.833 和 0.785，agent 最终保留的评分卡为 0.829 和 0.775，lightgbm 并不逊色。
+
+也就是说，在季节性数据上，这一差值拦下的是"同期验证集分数高"的模型，而真正的季节性下滑它无法识别。调整口径会影响所有数据集和已有实验的结论，计划单独处理，本次没有改动。
+
+## 运行记录与 trace
+
+运行过程中会保存事件日志、实验记录和检查点。进程中断后使用同一条命令即可恢复，已完成的实验直接复用，Optuna study 也会保留。运行结束后生成模型卡和 Mermaid 实验树。
+
+演示页中的"每一轮"由事件日志切分得到：每进入一次 DECIDE 计为新的一轮。每次 LLM 调用都会记录所处阶段、耗时、token 数以及 prompt 和回复原文，报错信息中的 key 片段会被脱敏。
+
+如需更细致的查看，可以接入 [Langfuse](https://langfuse.com)。在 `.env` 中填写 `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY` 和 `LANGFUSE_HOST`（格式见 `.env.example`）后，运行时会实时上报：每次任务对应一条 trace，其下依次是准备、各轮和收尾，再往下是各状态、每次 LLM 调用和事件。未配置时不上报任何数据，也不影响运行；Langfuse 侧出错只会产生一条警告。启用后 prompt 和回复会发送到 Langfuse，内容包括数据统计、字段名和决策文字，不含原始数据行。
+
+## 跨任务经验
+
+Memory 根据样本量、特征数、坏样本率、缺失率和时间跨度检索相似的历史任务。距离超过阈值时视为冷启动，不复用历史参数和经验。
+
+LLM 可以提出候选经验，但必须引用真实实验、使用代码允许的经验键，并与实验判定保持一致。经验的验证、启用和废弃由生命周期规则决定。当前检索只依赖上述统计量，无法保证识别所有业务差异。
+
+## 实验记录
+
+主要实验的结果和复现脚本均在仓库中。以下结论只对应当时运行的数据、配置和预算。
+
+| 实验 | 观察结果 | 记录 |
+|---|---|---|
+| 泄漏检查消融 | 关闭检查后，演示中的 AUC 从约 0.68 升至 1.00；将泄漏字段设为不可用后，AUC 降至约 0.50。 | `examples/a3_leak_demo.png` |
+| 多表特征构造 | 相比只使用原始宽表的 AutoML 基线，AUC 提升约 0.015～0.02；给基线提供相同特征后差异不再显著，说明收益主要来自特征。 | `examples/feature_factory_results.json` |
+| 跨任务 Memory | 历史超参数 warm-start 没有表现出更快的收敛。真实 LLM 会根据经验改变决策，但已有案例未显示更好的最终指标。 | `examples/memory_demo.md` |
+| 单调约束 | 在所测数据上，稳定性改善未达到保留门槛，最终未保留约束。 | `examples/monotone_ablation.md` |
+| 中断恢复 | 进程被 `kill -9` 中断后，通过同一条命令恢复并完成运行。 | `examples/resume_demo.md` |
+| 真实 LLM 运行 | DeepSeek 在酒店样本上运行 5 轮：lightgbm 两次全量复验被 OVERFIT_GAP 拒绝，第 4 轮改用评分卡并通过，第 5 轮主动停止。 | `examples/traces/hotel_deepseek3.json` |
+
+实验设置、对照方式和限制见 `docs/DESIGN_NOTES.md`。
 
 ## 目录
 
-```
-agent/       状态机、DECIDE 的 pydantic 校验与重试、动作集合
-data/        四段切分、point-in-time 关联、holdout 隔离
-features/    模板库展开成 SQL、筛选漏斗
-modeling/    model zoo（lgbm / lr_scorecard）、Optuna 内循环、单调约束
-evaluation/  guardrail 诊断码、配对 bootstrap、OOT-dev 使用预算收紧、唯一的验收模块
-memory/      数据集指纹检索、Lesson 生命周期
-tools/       LLM 可调用的工具，含 run_code 沙箱
-runtime/     事件日志、检查点 / resume、预算
-report/      模型卡 + Mermaid 实验树生成
-baselines/   B0（默认参数）、B1（AutoML）对照
-eval/        端到端脚本：跑 agent、跑基线、核心实验的复现脚本
-knowhow/     数据集字段语义、黑名单、特征模板（格式说明见 knowhow/README.md）
-examples/    预先跑好的结果，不需要下载数据也能看
-docs/        更详细的设计取舍与实验记录（含负面结果）
+| 目录 | 内容 |
+|---|---|
+| `agent/` | 状态机、规划与决策、动作校验和重试 |
+| `data/`、`knowhow/` | 数据加载与切分、字段定义、使用规则和特征模板 |
+| `data_sample/` | 随仓库分发的酒店预订样本和抽样脚本 |
+| `features/`、`tools/` | 特征生成、注册与筛选，实验和代码执行工具 |
+| `modeling/` | 模型实现、Optuna 搜索和单调约束 |
+| `evaluation/` | 诊断、模型比较、OOT-dev 使用预算和最终验收 |
+| `memory/`、`runtime/` | 经验检索与管理；事件日志、trace、Langfuse 上报、检查点和运行预算 |
+| `report/` | 模型卡和 Mermaid 实验树 |
+| `baselines/`、`eval/` | 基线实现、端到端运行、复现脚本和 trace 导出 |
+| `examples/`、`docs/` | 已保存的实验结果和运行记录、设计说明和限制 |
+| `app.py` | 演示页 |
+
+## 其他运行方式
+
+环境准备、完整数据下载和运行命令见 `RUN.md`。完整数据集不随仓库分发；除演示页外，`examples/` 中也保存了已运行的结果。命令行也可以直接在样本上运行：
+
+```bash
+python -m eval.run_task --dataset hotel_bookings --sample --task-id demo --llm mock --full-trials 5 --max-rounds 3
 ```
 
-## 运行
-
-见 `RUN.md`。`pytest` 不需要任何真实数据，约一百个测试全部用合成数据，几十秒内跑完。
+测试使用合成数据，运行 `pytest` 即可，不依赖真实数据和网络。接入新数据集前请先阅读 `knowhow/README.md`：部分 YAML 字段只是业务说明，只有代码明确读取的结构化配置才会参与执行。
 
 ## 已知边界
 
-以下部分目前只有设计、没有代码：独立的 critic 审查（用干净上下文复核泄漏/业务合理性，避免主 agent 自我审查的确认偏误）、多任务并发的 Executor 抽象、完整的三级 HITL 门控与异步审批（当前只实现了"泄漏时必须人工确认"和"决策连续校验失败"两个触发点）、分客群建模。`run_code` 的沙箱是子进程 + 超时，不是容器级隔离——如实说明取舍见 `docs/DESIGN_NOTES.md #3`。
+尚未实现的功能包括独立 critic 审查、多任务并发 Executor、完整的三级人工门控与异步审批，以及分客群建模。目前已有部分人工等待和恢复入口，但还不是完整的审批系统。
+
+`run_code` 仅使用子进程和超时控制，没有容器级隔离。同一用户权限下的代码仍可能访问宿主机文件或环境变量，不能作为执行不可信代码的沙箱。特征筛选和人工确认也不能替代严格的数据与标签隔离。
+
+现有实验能够说明流程可以跑通、部分设计假设成立，但不足以证明系统在任意数据集上都有效。实际接入业务时，需要逐项确认标签成熟度、字段可得时间、数据切分和验收口径，并检查执行结果是否遵守了这些约定。

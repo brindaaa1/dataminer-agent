@@ -42,6 +42,7 @@ def make_toy(root: Path, leak: bool = False, seed: int = 0):
     (kh / "blacklist.yaml").write_text("leakage_patterns: ['pymnt']\n")
     cfg = load_config()
     cfg["paths"] = {"knowhow_root": str(root / "kh"), "artifacts_root": str(root / "art"), "reports_root": str(root / "rep")}
+    cfg["memory"]["db"] = str(root / "memory.db")          # 跨任务记忆库也放临时目录，否则测试会往真实的 artifacts/memory.db 写玩具任务
     cfg["fidelity"] = {"low": {"sample_frac": 1.0, "n_trials": 3, "early_stopping_rounds": 5},
                        "full": {"sample_frac": 1.0, "n_trials": 4, "early_stopping_rounds": 5}}
     cfg["inner_loop"].update(n_threads=2, n_rounds_max=40, report_every=10, pruner_startup_trials=2)

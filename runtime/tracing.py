@@ -143,19 +143,25 @@ class LangfuseTracer(NoopTracer):
         self._safe(_fin)
 
 
+def langfuse_client():
+    """有 key、装了 SDK → Langfuse 客户端；否则 None。建模运行和接入会话共用。"""
+    load_env()
+    if not (os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")):
+        return None
+    try:
+        from langfuse import Langfuse
+    except ImportError:
+        log.warning("配置了 LANGFUSE_* 但没有安装 langfuse，跳过上报（pip install 'langfuse>=4'）")
+        return None
+    return Langfuse(public_key=os.environ["LANGFUSE_PUBLIC_KEY"], secret_key=os.environ["LANGFUSE_SECRET_KEY"],
+                    host=os.environ.get("LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_HOST") or None)
+
+
 def make_tracer(task_id: str, meta: dict | None = None, client=None):
     """有 key、装了 SDK → LangfuseTracer；否则 NoopTracer。client 仅供测试注入。"""
+    client = client or langfuse_client()
     if client is None:
-        load_env()
-        if not (os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")):
-            return NoopTracer()
-        try:
-            from langfuse import Langfuse
-        except ImportError:
-            log.warning("配置了 LANGFUSE_* 但没有安装 langfuse，跳过上报（pip install 'langfuse>=4'）")
-            return NoopTracer()
-        client = Langfuse(public_key=os.environ["LANGFUSE_PUBLIC_KEY"], secret_key=os.environ["LANGFUSE_SECRET_KEY"],
-                          host=os.environ.get("LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_HOST") or None)
+        return NoopTracer()
     try:
         return LangfuseTracer(client, task_id, meta)
     except Exception as e:

@@ -12,3 +12,6 @@ reports/
 
 # 编辑器本地历史（含 .env 快照），不能提交
 .history/
+
+# 开发过程文档（设计与实施计划），不随仓库分发
+docs/superpowers/

@@ -113,3 +113,24 @@ def test_tracer_failures_never_break_the_run(toy_cfg):
     tr = make_tracer("t3", client=Client())
     assert tr.enabled
     assert build(toy_cfg, PolicyMockLLM(), tr, task="t3").run() == State.DONE
+
+
+def test_intake_session_reported_as_one_trace(otel):
+    """接入会话：一条 trace，命名 dataminer · intake · <id>；画像、每轮起草（LLM 调用、校验、追问、回答）、写出、对比。"""
+    import json
+    from pathlib import Path
+    from intake.tracing import report_intake
+    client, exp = otel
+    rec = json.loads((Path(__file__).resolve().parents[1] / "examples/traces/intake/intake_hotel_deepseek.json").read_text())
+    report_intake(rec, client=client)
+    spans, parent, kind = tree(exp)
+    roots = [s for s in spans if parent(s) is None]
+    assert len(roots) == 1 and roots[0].name == f"intake {rec['dataset_id']}" and kind(roots[0]) == "agent"
+    assert {s.attributes.get("session.id") for s in spans if kind(s) != "event"} == {f"intake_{rec['dataset_id']}"}
+    n_rounds = max(e["round"] for e in rec["events"])
+    kids = [s.name for s in sorted(spans, key=lambda s: s.start_time) if parent(s) is roots[0]]
+    assert kids == ["数据画像"] + [f"第 {i} 轮起草" for i in range(1, n_rounds + 1)] + ["写出配置", "与手写配置对比"]
+    gens = [s for s in spans if kind(s) == "generation"]
+    assert len(gens) == sum(e["type"] == "llm_call" for e in rec["events"])
+    assert all(parent(g).name.endswith("轮起草") for g in gens)
+    assert sum(s.name == "用户回答" for s in spans) == sum(e["type"] == "answers" for e in rec["events"])

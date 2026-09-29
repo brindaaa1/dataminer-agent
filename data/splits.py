@@ -15,8 +15,9 @@ ID, LABEL, OBS, SPLIT_T = "_row_id", "_label", "_obs_time", "_split_time"
 def _label_sql(label: dict) -> str:
     if "source_col" in label:
         q = lambda xs: ", ".join("'" + x.replace("'", "''") + "'" for x in xs)
-        return (f"CASE WHEN {label['source_col']} IN ({q(label['positive'])}) THEN 1 "
-                f"WHEN {label['source_col']} IN ({q(label['negative'])}) THEN 0 END")
+        c = f'"{label["source_col"]}"::VARCHAR'          # 列名可能带空格；取值按文本比较（0/1 标签写成 '1'、'0'）
+        return (f"CASE WHEN {c} IN ({q(label['positive'])}) THEN 1 "
+                f"WHEN {c} IN ({q(label['negative'])}) THEN 0 END")
     return label["col"]
 
 

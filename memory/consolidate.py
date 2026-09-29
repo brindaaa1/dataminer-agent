@@ -5,6 +5,7 @@ import hashlib
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from evaluation.metrics import primary
 from memory.retrieval import fingerprint_distance
 from memory.schema import Lesson
 
@@ -88,11 +89,11 @@ def admit(mem, ok: list[Proposal], records, task_id: str, fp: dict, cfg: dict) -
     for p in ok:
         cur = _find(mem, p.key, p.polarity, fp, cfg)
         lid = cur["lesson_id"] if cur else _id(f"{p.key}@{task_id}", p.polarity)      # 新谱系以首个提出它的任务命名
-        deltas = []
+        deltas, k = [], f"oot_dev_{primary(cfg)}"
         for e in p.evidence:
             par = by.get(by[e].parent_exp_id)
-            if par and par.metrics.get("oot_dev_auc") is not None and by[e].metrics.get("oot_dev_auc") is not None:
-                deltas.append(by[e].metrics["oot_dev_auc"] - par.metrics["oot_dev_auc"])
+            if par and par.metrics.get(k) is not None and by[e].metrics.get(k) is not None:
+                deltas.append(by[e].metrics[k] - par.metrics[k])
         if cur:
             cur["evidence"] = sorted(set(cur["evidence"]) | set(p.evidence))
             cur["tasks"] = sorted(set(cur["tasks"]) | {task_id})

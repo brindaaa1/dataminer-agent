@@ -9,6 +9,7 @@ import numpy as np
 from data.access import DataAccess
 from evaluation.compare import paired_bootstrap
 from evaluation.guardrails import diagnose, single_feature_auc
+from evaluation.metrics import METRICS, primary
 from evaluation.oot_budget import OOTBudget
 
 
@@ -59,8 +60,9 @@ class Evaluator:
 
     def evaluate(self, cand: dict, best: dict | None, scan: dict | None = None, *,
                  history_verdicts=None, remaining_budget_frac=None, handled_leaks=(),
-                 llm_claimed_verdict=None) -> dict:
-        """cand/best: run_experiment 的返回 dict。llm_claimed_verdict 仅记录，不参与判定。"""
+                 llm_claimed_verdict=None, guard: bool = True) -> dict:
+        """cand/best: run_experiment 的返回 dict。llm_claimed_verdict 仅记录，不参与判定。
+        guard：护栏只和『已接受的当前最优』比；模型赛跑里的同伴比较（base 只是先跑的那个）不检查护栏。"""
         c = self.cfg["evaluator"]
         scan = scan or {}
         diag = diagnose(cand["metrics"], self.cfg, n_features=cand["n_features"],
@@ -93,11 +95,18 @@ class Evaluator:
 
         k, alpha = self.budget.consume(key=cand['exp_id'])
         cmp = paired_bootstrap(self.y_oot, self._pred(cand["exp_id"]), self._pred(best["exp_id"]), alpha,
-                               c["bootstrap_n"], c["bootstrap_seed"])
+                               c["bootstrap_n"], c["bootstrap_seed"], metric_fn=METRICS[primary(self.cfg)].fn)
         cmp["k"] = k
         out["compare"], out["oot_used"] = cmp, k
         if not cmp["significant"]:
             out["diagnosis_codes"] = codes + ["PLATEAU"]
+        bm, cm = best["metrics"], cand["metrics"]
+        guard = {g: {"best": bm[f"oot_dev_{g}"], "cand": cm[f"oot_dev_{g}"], "drop": bm[f"oot_dev_{g}"] - cm[f"oot_dev_{g}"]}
+                 for g, tol in self.cfg["metric"]["guards"].items() if guard and bm[f"oot_dev_{g}"] - cm[f"oot_dev_{g}"] > tol}
+        if guard:                                                 # 护栏只拦截，不参与排名
+            fails.append("GUARD_FAIL")
+            out["diagnosis_codes"] = out["diagnosis_codes"] + ["GUARD_FAIL"]
+            out["diagnosis_details"]["GUARD_FAIL"] = guard
         mono = self.cfg["monotone"]
         cc, bc = cand.get("config", {}), best.get("config", {})
         noninferior = (mono["keep_if_psi_better"] and cc.get("monotone") and not bc.get("monotone") and cand["fidelity"] == "full"

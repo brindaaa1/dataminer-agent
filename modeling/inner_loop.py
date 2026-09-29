@@ -5,22 +5,17 @@ from pathlib import Path
 
 import numpy as np
 import optuna
-from sklearn.metrics import roc_auc_score
 
 from data.access import DataAccess
 from data.knowhow import load_knowhow
 from evaluation.guardrails import psi
+from evaluation.metrics import METRICS, all_metrics, primary
 from features.registry import Registry
 from modeling.monotone import constraints_for
 from modeling.prep import prepare
 from modeling.zoo import ZOO, sample_params
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-
-def ks(y, p):
-    from scipy.stats import ks_2samp
-    return float(ks_2samp(p[y == 1], p[y == 0]).statistic)
 
 
 def clip_to_space(params: dict, space: dict) -> dict:
@@ -59,6 +54,7 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
     ytr, yva, yoo = tr["_label"], va["_label"], oo["_label"]
 
     Spec = ZOO[model]
+    pm = primary(cfg)
     space = space or Spec.default_space
     mono, mono_rep = None, None
     if monotone:
@@ -86,7 +82,7 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
                         raise optuna.TrialPruned()
             cbs = [pruning_cb]
         m = Spec(params, cfg, seed, mono).fit(Xtr, ytr, Xva, yva, fid["early_stopping_rounds"], cbs)
-        return roc_auc_score(yva, m.predict(Xva))
+        return METRICS[pm].fn(yva.values, m.predict(Xva))          # 目标函数：valid 上的主指标
 
     remaining = n_trials - len([t for t in study.trials if t.state.is_finished()])
     if remaining > 0:
@@ -94,9 +90,9 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
     best = study.best_trial
     m = Spec(best.params, cfg, seed, mono).fit(Xtr, ytr, Xva, yva, fid["early_stopping_rounds"])
     p_tr, p_va, p_oo = m.predict(Xtr), m.predict(Xva), m.predict(Xoo)
-    metrics = {"train_auc": roc_auc_score(ytr, p_tr), "valid_auc": roc_auc_score(yva, p_va),
-               "oot_dev_auc": roc_auc_score(yoo, p_oo), "oot_dev_ks": ks(yoo.values, p_oo)}
-    metrics["gap"] = metrics["valid_auc"] - metrics["oot_dev_auc"]
+    metrics = {f"{seg}_{k}": v for seg, (y_, p_) in {"train": (ytr, p_tr), "valid": (yva, p_va), "oot_dev": (yoo, p_oo)}.items()
+               for k, v in all_metrics(y_.values, p_).items()}
+    metrics["gap"] = metrics[f"valid_{pm}"] - metrics[f"oot_dev_{pm}"]
     metrics["score_psi"] = psi(p_va, p_oo, cfg["evaluator"]["psi_bins"])
     out = art / "experiments" / exp_id
     out.mkdir(parents=True, exist_ok=True)

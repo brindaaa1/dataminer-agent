@@ -2,7 +2,7 @@
 
 
 def stop_check(*, cfg, oot_budget, round_no: int, max_rounds: int, remaining: dict,
-               history_verdicts: list, best_oot_auc: float | None = None, target_value: float | None = None,
+               history_verdicts: list, best_score: float | None = None, target_value: float | None = None,
                data_fatal: bool = False, llm_stop: bool = False) -> str | None:
     """返回停止原因（字符串）或 None。remaining: {tokens, cpu_minutes, wall_minutes}。"""
     if data_fatal:
@@ -16,7 +16,7 @@ def stop_check(*, cfg, oot_budget, round_no: int, max_rounds: int, remaining: di
         return "NO_PROGRESS"
     if oot_budget.exhausted:
         return "OOT_BUDGET_EXHAUSTED"
-    if target_value is not None and best_oot_auc is not None and best_oot_auc >= target_value:
+    if target_value is not None and best_score is not None and best_score >= target_value:
         return "TARGET_REACHED"
     if llm_stop:
         return "LLM_STOP"                      # 软停止：仅当上面所有硬条件都未触发

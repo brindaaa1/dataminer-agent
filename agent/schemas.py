@@ -39,15 +39,26 @@ class Direction(BaseModel):
     expected_gain: str = ""
 
 
+class CandidateModel(BaseModel):
+    model: str
+    reason: str
+
+
 class Plan(BaseModel):
     model_config = ConfigDict(extra="ignore")
     directions: list[Direction]
+    candidate_models: list[CandidateModel] = Field(default_factory=list)    # LLM 提名，代码赛跑裁决
 
 
 class Constraints(BaseModel):
     interpretability: Literal["none", "high"] = "none"    # high → 只能用 lr_scorecard
     max_features: int | None = None
     banned_models: list[str] = Field(default_factory=list)
+
+
+class MetricSpec(BaseModel):
+    primary: Literal["auc", "pr_auc", "ks"] = "auc"
+    guards: dict[str, float] = Field(default_factory=dict)   # 指标 → 相对当前最优最多允许变差多少
 
 
 class Budget(BaseModel):
@@ -63,7 +74,7 @@ class TaskSpec(BaseModel):
     label_col: str | None = None
     observation_time_col: str | None = None
     oot_windows: dict | None = None
-    target_metric: Literal["auc", "ks"] = "auc"
+    metric: MetricSpec = Field(default_factory=MetricSpec)
     target_value: float | None = None
     constraints: Constraints = Field(default_factory=Constraints)
     budget: Budget
@@ -79,7 +90,8 @@ class TaskSpec(BaseModel):
                    label_def=lab.get("definition"), label_col=lab.get("source_col") or lab.get("col"),
                    observation_time_col=d.get("observation_time_col") or (d.get("observation_time") or {}).get("booking_date"),
                    oot_windows={"oot_dev": sp.get("oot_dev"), "holdout": sp.get("holdout")},
-                   budget=Budget(**cfg["run"]["budget"]), **kw)
+                   budget=Budget(**cfg["run"]["budget"]),
+                   metric=MetricSpec(**cfg["task_specs"].get(dataset, {}).get("metric", cfg["metric"])), **kw)
 
     def missing_required(self) -> list[str]:
         """§4.4：这三个字段推断不出来且猜错代价高，禁止 LLM 假设，缺了就必须问人。"""

@@ -28,6 +28,10 @@ split:
 
 # 任务规格：knowhow/<dataset>/ 里只有散文、无法结构化读取的部分（时间列的具体解析写法、行过滤条件）。
 # label、切分窗口、黑名单等结构化内容全部来自 knowhow/，不在这里重复。
+# 任务指标口径的默认值；各数据集在 task_specs.<ds>.metric 覆盖。运行开始前锁定，之后各模块只读。
+# 主指标决定所有比较（Optuna 目标、OVERFIT_GAP、配对 bootstrap）；guards 只拦截：相对当前最优变差超过容差即拒。
+metric: {primary: auc, guards: {}}
+
 task_specs:
   lending_club:
     row_filter: "trim(term) = '36 months'"        # 呼应 data_dictionary.yaml 的 maturity_rule
@@ -36,12 +40,14 @@ task_specs:
     date_format: "%b-%Y"                          # data_dictionary 里 type: date 字段的格式
     prior_aliases: {earliest_cr_line: credit_history_months}   # 预处理后 earliest_cr_line 就是"信用历史月数"
     use_incumbent: false                          # 消融实验：改为 true 可评估"复用在位模型分数"的增量
+    metric: {primary: auc, guards: {ks: 0.02}}
   hotel_bookings:
     row_filter: "true"
     split_time_expr: "strptime(arrival_date_year::varchar || '-' || arrival_date_month || '-' || arrival_date_day_of_month::varchar, '%Y-%B-%d')"
     observation_time_expr: "strptime(arrival_date_year::varchar || '-' || arrival_date_month || '-' || arrival_date_day_of_month::varchar, '%Y-%B-%d') - to_days(lead_time)"
     use_incumbent: false
     csv_null_values: ["NA"]                       # children 列里的 NA 字符串
+    metric: {primary: auc, guards: {pr_auc: 0.02}}
     derived_expr_overrides:                       # know-how 里的伪 SQL 在 DuckDB 中的等价写法（不改 knowhow 文件）
       booking_month: "month(arrival_date - to_days(lead_time::int))"
     sql_aliases:                                  # classic_derived 表达式里用到的量（data_dictionary.observation_time 中的文字定义）
@@ -52,6 +58,7 @@ task_specs:
     pit_extra_filters:                    # pit_rules 中只有散文的部分，供 features/factory.py 使用
       bureau: "(DAYS_ENDDATE_FACT IS NULL OR DAYS_ENDDATE_FACT <= 0)"
     dev_sample_ids: 30000                # 开发期特征计算只用这么多申请人；最终结果再用全量
+    metric: {primary: auc, guards: {ks: 0.02}}
 
 thresholds:
   maturity_current_share_max: 0.05    # 某月未完结状态占比超过则 DATA_FATAL 警告
@@ -70,7 +77,6 @@ inner_loop:
   n_rounds_max: 500          # lgbm 每个 trial 的最大树数
 
 evaluator:
-  gap_max: 0.03                # OVERFIT_GAP：valid AUC − OOT-dev AUC
   leak_single_auc: 0.75        # LEAK_SUSPECT：单特征 AUC
   psi_warn: 0.10
   psi_severe: 0.25

@@ -136,3 +136,18 @@ def test_single_feature_auc_and_iv_accept_datetime_columns():
     y = pd.Series(np.r_[np.zeros(300), np.ones(300)].astype(int))
     d = pd.Series(pd.to_datetime("2017-01-01") + pd.to_timedelta(np.r_[np.arange(300), np.arange(300) + 400], unit="D"))
     assert single_feature_auc(d, y) > 0.9 and iv(d, y) > 0.5
+
+
+def test_guard_rejects_when_guard_metric_drops(ev):
+    e, mk = ev
+    e.cfg["metric"] = {"primary": "auc", "guards": {"ks": 0.02}}
+    out = e.evaluate(mk("good", oot_dev_ks=.30), mk("base", oot_dev_ks=.40))
+    assert out["verdict"] == "REJECT" and "GUARD_FAIL" in out["diagnosis_codes"]
+    assert abs(out["diagnosis_details"]["GUARD_FAIL"]["ks"]["drop"] - .10) < 1e-9
+
+
+def test_guard_within_tolerance_keeps_verdict(ev):
+    e, mk = ev
+    e.cfg["metric"] = {"primary": "auc", "guards": {"ks": 0.02}}
+    out = e.evaluate(mk("good", oot_dev_ks=.39), mk("base", oot_dev_ks=.40))
+    assert out["verdict"] == "ACCEPT"

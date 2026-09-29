@@ -1,4 +1,4 @@
-"""配对 bootstrap：同一批 OOT-dev 样本上比较两个预测的 AUC 差，置信区间下界 > 0 才算显著提升（§4.9）。"""
+"""配对 bootstrap：同一批 OOT-dev 样本上比较两个预测的主指标差，置信区间下界 > 0 才算显著提升（§4.9）。"""
 import numpy as np
 
 
@@ -11,7 +11,7 @@ def _auc(y, p):
     return (r[y == 1].sum() - n1 * (n1 + 1) / 2) / (n1 * n0)
 
 
-def paired_bootstrap(y, p_new, p_base, alpha: float, n: int = 1000, seed: int = 0) -> dict:
+def paired_bootstrap(y, p_new, p_base, alpha: float, n: int = 1000, seed: int = 0, metric_fn=_auc) -> dict:
     """返回 delta、单侧 (1-alpha) 置信区间下界/上界。用同一批重采样索引，保证配对。"""
     y, p_new, p_base = map(np.asarray, (y, p_new, p_base))
     rng = np.random.default_rng(seed)
@@ -19,10 +19,10 @@ def paired_bootstrap(y, p_new, p_base, alpha: float, n: int = 1000, seed: int = 
     deltas = np.empty(n)
     for i in range(n):
         idx = rng.choice(idx_all, len(y))
-        deltas[i] = _auc(y[idx], p_new[idx]) - _auc(y[idx], p_base[idx])
+        deltas[i] = metric_fn(y[idx], p_new[idx]) - metric_fn(y[idx], p_base[idx])
     lo = float(np.quantile(deltas, alpha))          # 单侧：下界取 alpha 分位
     hi = float(np.quantile(deltas, 1 - alpha))
-    delta = float(_auc(y, p_new) - _auc(y, p_base))
+    delta = float(metric_fn(y, p_new) - metric_fn(y, p_base))
     return {"delta": delta, "ci_low": lo, "ci_high": hi, "alpha": alpha, "significant": lo > 0}
 
 

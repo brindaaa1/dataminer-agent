@@ -11,6 +11,7 @@ import yaml
 from data.access import DataAccess
 from data.knowhow import field_table, load_knowhow, normalize
 from evaluation.compare import monthly_auc
+from evaluation.metrics import METRICS, primary
 from evaluation.guardrails import psi
 from features.registry import Registry
 from features.screen import iv
@@ -39,18 +40,19 @@ def safe_narrative(text: str, facts: dict) -> str | None:
     return text.strip()
 
 
-def mermaid_tree(records) -> str:
-    """节点：动作 / 保真度 / OOT-dev AUC（相对父节点的变化）/ 判定；失效节点虚线。"""
+def mermaid_tree(records, pm: str) -> str:
+    """节点：动作 / 保真度 / OOT-dev 主指标（相对父节点的变化）/ 判定；失效节点虚线。"""
     by = {r.exp_id: r for r in records}
     sid = lambda e: "n_" + re.sub(r"\W", "_", e)
     lines = ["flowchart TD", "  ROOT((start))"]
     for r in records:
-        auc = r.metrics.get("oot_dev_auc")
+        k = f"oot_dev_{pm}"
+        v = r.metrics.get(k)
         par = by.get(r.parent_exp_id)
         delta = ""
-        if auc is not None and par is not None and par.metrics.get("oot_dev_auc") is not None:
-            delta = f" ({auc - par.metrics['oot_dev_auc']:+.4f})"
-        body = f"{r.exp_id}<br/>{r.action_type} [{r.fidelity}]<br/>" + (f"AUC {auc:.4f}{delta}<br/>" if auc is not None else "") + r.verdict
+        if v is not None and par is not None and par.metrics.get(k) is not None:
+            delta = f" ({v - par.metrics[k]:+.4f})"
+        body = f"{r.exp_id}<br/>{r.action_type} [{r.fidelity}]<br/>" + (f"{pm.upper()} {v:.4f}{delta}<br/>" if v is not None else "") + r.verdict
         if r.diagnosis_codes:
             body += "<br/>" + ",".join(r.diagnosis_codes)
         lines.append(f'  {sid(r.exp_id)}["{body}"]:::{r.verdict.lower()}{"_inv" if r.invalidated else ""}')
@@ -87,6 +89,7 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
     rd.mkdir(exist_ok=True)
     recs = store.all(task)
     best_id = p["best_exp_id"]
+    pm = primary(cfg)
     da = DataAccess(ds, str(art))
     tr, va, oo = da.load("train"), da.load("valid"), da.load("oot_dev")
     risks, L = [], []
@@ -95,9 +98,9 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
     facts = {"dataset": ds, "best_exp": best_id, "n_experiments": len(recs), "n_accept": sum(r.verdict == "ACCEPT" for r in recs),
              "oot_used": oot_used, "stop_reason": p["stop_reason"]}
     if best:
-        facts.update(model=best["config"]["model"], oot_dev_auc=round(best["metrics"]["oot_dev_auc"], 4))
+        facts.update({"model": best["config"]["model"], "metric": pm, f"oot_dev_{pm}": round(best["metrics"][f"oot_dev_{pm}"], 4)})
     if final:
-        facts["holdout_auc"] = round(final["holdout_auc"], 4)
+        facts[f"holdout_{pm}"] = round(final[f"holdout_{pm}"], 4)
     narrative = None
     if llm is not None:
         try:
@@ -110,7 +113,7 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
     L += ["## 执行摘要", "", narrative or "（未生成摘要，或摘要中的数字无法在事实数据中核对，已丢弃。）", ""]
     s = spec
     L += ["## 1. 任务规格", "", "| 项 | 值 |", "|---|---|", f"| label 定义 | {s.label_def} |", f"| 观察时间列 | {s.observation_time_col} |",
-          f"| OOT 窗口 | {json.dumps(s.oot_windows, ensure_ascii=False)} |", f"| 目标指标 | {s.target_metric}（目标值 {s.target_value}） |",
+          f"| OOT 窗口 | {json.dumps(s.oot_windows, ensure_ascii=False)} |", f"| 目标指标 | {s.metric.primary}（护栏 {s.metric.guards}，目标值 {s.target_value}） |",
           f"| 约束 | {s.constraints.model_dump()} |", f"| 预算 | {s.budget.model_dump()} |", f"| 自治级别 | {s.autonomy} |", ""]
     L += ["## 2. 数据切分", "", "| 切分 | 样本数 | 坏样本率 |", "|---|---|---|"]
     for nm, df in (("train", tr), ("valid", va), ("oot_dev", oo)):
@@ -126,13 +129,18 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
         m = best["metrics"]
         L += ["## 3. 最终模型", "", f"- 实验：`{best_id}`；模型：`{best['config']['model']}`；保真度：{best['config']['fidelity']}；trial 数：{best['n_trials']}（剪枝 {best['n_pruned']}）",
               f"- 特征数：{best['n_features']}；最优参数：`{json.dumps(best['best_params'], ensure_ascii=False)}`", ""]
-        L += ["## 4. 各段指标", "", "| 段 | AUC | KS |", "|---|---|---|", f"| train | {m['train_auc']:.4f} | |", f"| valid | {m['valid_auc']:.4f} | |",
-              f"| OOT-dev | {m['oot_dev_auc']:.4f} | {m['oot_dev_ks']:.4f} |"]
+        names = [pm] + [k for k in METRICS if k != pm]                    # 主指标放第一列并加粗
+        bold = lambda k, t: f"**{t}**" if k == pm else t
+
+        def row(label, src, pre):
+            return f"| {label} | " + " | ".join(bold(k, f"{src[f'{pre}_{k}']:.4f}") for k in names) + " |"
+        L += ["## 4. 各段指标", "", "| 段 | " + " | ".join(bold(k, k.upper()) for k in names) + " |", "|---|" + "---|" * len(names),
+              row("train", m, "train"), row("valid", m, "valid"), row("OOT-dev", m, "oot_dev")]
         if final:
-            L.append(f"| holdout | {final['holdout_auc']:.4f} | {final['holdout_ks']:.4f} |")
+            L.append(row("holdout", final, "holdout"))
         L += ["", f"- valid − OOT-dev gap：{m['gap']:.4f}；分数 PSI（valid→OOT-dev）：{m.get('score_psi', float('nan')):.4f}；OOT-dev 使用次数：{oot_used}", ""]
         if final and final["overfit_to_oot_dev"]:
-            risks.append(f"holdout AUC 比 OOT-dev 低 {final['drop']:.4f}，超过 δ={cfg['final_gate']['delta']}：**疑似对 OOT-dev 过拟合**。")
+            risks.append(f"holdout {pm.upper()} 比 OOT-dev 低 {final['drop']:.4f}，超过 δ={cfg['final_gate']['delta']}：**疑似对 OOT-dev 过拟合**。")
         if has_time:
             oot_pred = np.load(art / "experiments" / best_id / "oot_dev_pred.npy")
             val_pred = np.load(art / "experiments" / best_id / "valid_pred.npy")
@@ -188,11 +196,11 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
         L += ["## 3. 最终模型", "", "没有通过 evaluator 的全保真度实验，未运行 holdout。", ""]
         risks.append("没有 ACCEPT 的全保真度实验，本次运行无最终模型。")
 
-    tree = mermaid_tree(recs)
+    tree = mermaid_tree(recs, pm)
     (rd / f"experiment_tree_{task}.mmd").write_text(tree)
-    L += ["## 7. 实验树", "", "```mermaid", tree, "```", "", "| 实验 | 父节点 | 动作 | 保真度 | OOT-dev AUC | 判定 | 诊断码 |", "|---|---|---|---|---|---|---|"]
+    L += ["## 7. 实验树", "", "```mermaid", tree, "```", "", f"| 实验 | 父节点 | 动作 | 保真度 | OOT-dev {pm.upper()} | 判定 | 诊断码 |", "|---|---|---|---|---|---|---|"]
     for r in recs:
-        a = r.metrics.get("oot_dev_auc")
+        a = r.metrics.get(f"oot_dev_{pm}")
         L.append(f"| {r.exp_id}{' (失效)' if r.invalidated else ''} | {r.parent_exp_id or '-'} | {r.action_type} | {r.fidelity} | {f'{a:.4f}' if a is not None else '-'} | {r.verdict} | {','.join(r.diagnosis_codes)} |")
     L.append("")
 

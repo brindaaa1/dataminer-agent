@@ -15,7 +15,7 @@ def rec(i, parent, verdict, auc, inv=False, codes=()):
 
 
 def test_mermaid_tree_structure_and_delta():
-    t = mermaid_tree([rec("a-1", None, "ACCEPT", 0.70), rec("b.2", "a-1", "REJECT", 0.69, codes=["PLATEAU"]), rec("c3", "a-1", "ACCEPT", 0.71, inv=True)])
+    t = mermaid_tree([rec("a-1", None, "ACCEPT", 0.70), rec("b.2", "a-1", "REJECT", 0.69, codes=["PLATEAU"]), rec("c3", "a-1", "ACCEPT", 0.71, inv=True)], "auc")
     assert t.startswith("flowchart TD") and "ROOT --> n_a_1" in t and "n_a_1 --> n_b_2" in t   # 非法字符被规整
     assert "(-0.0100)" in t and "(+0.0100)" in t and "PLATEAU" in t
     assert ":::accept_inv" in t                                                                # 失效节点单独样式

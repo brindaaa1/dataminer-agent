@@ -118,7 +118,9 @@ class PolicyMockLLM:
     def complete(self, system, user, temperature=0.0):
         ctx = last_json_block(user)
         if ctx.get("mode") == "PLAN":
-            return json.dumps({"directions": [{"direction": "先比较模型，再调参", "rationale": "mock"}]}, ensure_ascii=False), 0
+            return json.dumps({"directions": [{"direction": "先比较模型，再调参", "rationale": "mock"}],
+                               "candidate_models": [{"model": "lgbm", "reason": "mock：通用强基线"},
+                                                    {"model": "lr_scorecard", "reason": "mock：跨时间最稳"}]}, ensure_ascii=False), 0
         if ctx.get("mode") == "CONSOLIDATE":
             v = ctx["verdicts"]
             out = []
@@ -130,7 +132,7 @@ class PolicyMockLLM:
         if ctx.get("mode") == "REPORT":
             f = ctx["facts"]
             return f"本次共运行 {f['n_experiments']} 个实验，其中 {f['n_accept']} 个被接受。" + (
-                f"最终模型为 {f['model']}，OOT-dev AUC 为 {f['oot_dev_auc']}。" if f.get("model") else "没有产生最终模型。"), 0
+                f"最终模型为 {f['model']}，OOT-dev {f['metric'].upper()} 为 {f['oot_dev_' + f['metric']]}。" if f.get("model") else "没有产生最终模型。"), 0
         d = self._decide(ctx)
         return json.dumps(d, ensure_ascii=False), 0
 

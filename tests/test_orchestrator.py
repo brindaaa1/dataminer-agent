@@ -246,3 +246,85 @@ def test_no_final_model_nudges_promotion(toy_cfg):
     assert rej and "偏离策略先验" in rej[0]["payload"]["errors"][0] and "PROMOTE_FIDELITY" in rej[0]["payload"]["errors"][0]
     assert o.p["best_exp_id"] and o.p["final"]                            # 升保真度后被接受，有最终模型
     assert "NO_FINAL_MODEL" not in ctxs[-1]["diagnosis"]["codes"] and ctxs[-1]["final_model"]["exists"]
+
+
+STOP = {"action": "STOP", "params": {"reason": "x"}, "hypothesis": "h", "expected_gain": "g",
+        "est_cost": {"tokens": 0, "cpu_minutes": 0}, "rationale": "stop"}
+
+
+def _raced(cfg, plan, task_id, **spec_kw):
+    from agent.llm import last_json_block
+
+    def llm(user):
+        ctx = last_json_block(user)
+        return plan(ctx) if ctx.get("mode") == "PLAN" else STOP
+    o = Orchestrator(toy_spec(cfg, autonomy="L0", **spec_kw), cfg, ScriptedLLM(llm), None, task_id)
+    o.run()
+    return o, {r.config["model"] for r in o.store.all(task_id) if r.action_type == "RACE"}
+
+
+def test_race_only_runs_llm_candidates(toy_cfg):
+    from modeling.zoo import ZOO
+
+    def plan(ctx):
+        assert set(ctx["models"]) == set(ZOO) and ctx["data_profile"]["n_categorical"] == 1
+        return {"directions": [], "candidate_models": [{"model": "lr_scorecard", "reason": "r"},
+                                                       {"model": "random_forest", "reason": "r"}]}
+    o, raced = _raced(toy_cfg, plan, "c1")
+    assert raced == {"lr_scorecard", "random_forest"}
+    assert o.events.query("plan_candidates")
+
+
+def test_candidates_intersect_with_constraints(toy_cfg):
+    plan = lambda ctx: {"directions": [], "candidate_models": [{"model": "lgbm", "reason": "r"},
+                                                               {"model": "random_forest", "reason": "r"}]}
+    _, raced = _raced(toy_cfg, plan, "c2", constraints={"banned_models": ["lgbm"]})
+    assert raced == {"random_forest"}
+
+
+def test_no_candidates_races_all_allowed(toy_cfg):
+    from modeling.zoo import ZOO
+    _, raced = _raced(toy_cfg, lambda ctx: {"directions": []}, "c3")
+    assert raced == set(ZOO)
+
+
+def test_decide_context_keeps_templates_and_model_profiles(toy_cfg):
+    seen = {}
+
+    def plan(ctx):
+        return {"directions": [], "candidate_models": [{"model": "lr_scorecard", "reason": "r"}]}
+
+    def llm(user):
+        from agent.llm import last_json_block
+        ctx = last_json_block(user)
+        if ctx.get("mode") == "PLAN":
+            return plan(ctx)
+        seen.setdefault("ctx", ctx)
+        return STOP
+    o = Orchestrator(toy_spec(toy_cfg, autonomy="L0"), toy_cfg, ScriptedLLM(llm), None, "tpl")
+    o.run()
+    assert "templates" in seen["ctx"] and isinstance(seen["ctx"]["models_available"], dict)
+
+
+def test_guard_not_applied_between_race_peers(toy_cfg):
+    from agent.schemas import MetricSpec
+    plan = lambda ctx: {"directions": [], "candidate_models": [{"model": "lgbm", "reason": "r"},
+                                                               {"model": "lr_scorecard", "reason": "r"}]}
+    o, _ = _raced(toy_cfg, plan, "g1", metric=MetricSpec(guards={"pr_auc": -1.0}))   # 容差为负：任何比较都会触发护栏
+    races = [r for r in o.store.all("g1") if r.action_type == "RACE"]
+    assert len(races) == 2 and not any("GUARD_FAIL" in r.diagnosis_codes for r in races)
+
+
+def test_duplicate_candidates_race_once(toy_cfg):
+    plan = lambda ctx: {"directions": [], "candidate_models": [{"model": "lr_scorecard", "reason": "r"},
+                                                               {"model": "lr_scorecard", "reason": "r"}]}
+    o, _ = _raced(toy_cfg, plan, "d1")
+    assert o.p["race"] == ["d1_race_lr_scorecard"] and len(o.events.query("evaluated")) == 1
+
+
+def test_metric_locked_from_checkpoint_on_resume(toy_cfg):
+    from agent.schemas import MetricSpec
+    o = Orchestrator(toy_spec(toy_cfg, autonomy="L0"), toy_cfg, PolicyMockLLM(), None, "lk")
+    o.run(max_steps=1)                                                       # 写入检查点，口径为默认 auc
+    Orchestrator(toy_spec(toy_cfg, autonomy="L0", metric=MetricSpec(primary="ks")), toy_cfg, PolicyMockLLM(), None, "lk")
+    assert toy_cfg["metric"]["primary"] == "auc"

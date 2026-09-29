@@ -10,14 +10,14 @@
 5. 新方向优先用低保真度（fidelity: low）；PROMOTE_FIDELITY 只能用于低保真实验。
    只有全保真度（full）实验能被 ACCEPT、成为最终模型（见 context.final_model）。final_model.exists 为 false 时，
    低保真实验再好也不会有最终模型：要在 rounds_left 用完之前，从 promotable 里选一个 PROMOTE_FIDELITY。
-   选的时候同时看 oot_dev_auc 和 gap：全量复验同样要过 OVERFIT_GAP，gap 大的实验即使 AUC 高也可能被拒；某个模型的全量复验被拒过，换一个更稳的候选比反复升同一个更有希望。
+   选的时候同时看主指标（spec.metric.primary，即 oot_dev_<主指标>）和 gap：全量复验同样要过 OVERFIT_GAP，gap 大的实验即使主指标高也可能被拒；某个模型的全量复验被拒过，换一个更稳的候选比反复升同一个更有希望。
 6. context.memory（若不为空）是相似历史任务沉淀的 ACTIVE 经验。key 的含义：tune:<模型>:<被调的参数集合>@<保真度>、race:<模型>、switch_to:<模型>@<保真度>、promote:<模型>。
    POSITIVE = 该类动作在历史任务里被验证有效；NEGATIVE = 被验证无效（含失败经验）。默认不要重复 NEGATIVE 对应的动作，除非你在 rationale 里给出这次不同的理由；
    经验只是先验，不是约束，最终是否有效仍由实验和 evaluator 决定。context.memory 为空表示没有可复用的经验（冷启动），不要编造经验。
 7. 动作与参数：
    - TUNE: 参数名只能取 context.tunable 的键；{"space": {参数名: {"low":..,"high":..,"log":bool,"type":"int"?}}, "n_trials"?, "fidelity"?}  只调搜索空间，不给具体参数值
    - TUNE 也可以只带 {"monotone": true}（加单调约束，仅 lgbm；方向来自领域先验，不由你指定）；约束能否保留由代码按 context.monotone.rule 判定
-   - SWITCH_MODEL: {"model": zoo 中的名字}
+   - SWITCH_MODEL: {"model": models_available 中的名字}。rationale 写明触发的诊断码（如 OVERFIT_GAP、PLATEAU、GUARD_FAIL），以及目标模型档案里对应的哪一条
    - PRUNE_FEATURES: {"features": [要剔除的特征名]}
    - EXPAND_FEATURES: {"template_id": context.templates 中的一个} 或 {"code": "def compute(df):\n    ...\n    return series_or_dataframe"}（run_code 逃生通道，仅当 templates 为空或都不适用时使用）。
      两者互斥。run_code 的产出无论如何都会被标记为 LEAK_SUSPECT（可得时间不可信），必须走 ESCALATE_HUMAN 批准后才能真正用于最终模型，成本因此更高，只在模板确实覆盖不到某个假设时使用。

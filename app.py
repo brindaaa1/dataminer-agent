@@ -21,11 +21,12 @@ ROOT = Path(__file__).resolve().parent
 os.chdir(ROOT)                                           # config.yaml、knowhow/ 等路径都相对仓库根目录
 
 from agent.llm import extract_json, redact  # noqa: E402
+from app_helpers import REQUIRED_KEYS, draft_rows, intake_rounds, metric_label, primary_of, q_label, trial_chart  # noqa: E402
 from data.sample import SAMPLE_CSV, sample_art  # noqa: E402
 from runtime.env import load_env  # noqa: E402
-from runtime.trace import PHASE_ROUND, PHASE_SETUP, build_trace, round_rows, segment_evaluations, summarize  # noqa: E402
+from runtime.trace import PHASE_ROUND, PHASE_SETUP, build_trace, load_trials, round_rows, segment_evaluations, summarize  # noqa: E402
 
-EXAMPLES = ROOT / "examples" / "traces"
+EXAMPLES = Path(os.environ.get("DATAMINER_EXAMPLES") or ROOT / "examples" / "traces")     # 测试可指向临时目录
 load_env()                                               # .env 里的 LLM key 和 LANGFUSE_*（不覆盖已有环境变量）
 
 
@@ -41,7 +42,8 @@ VERDICTS = {
     "NONE": ("➖", "无判定", None, None, "本轮没有训练模型（如 INVESTIGATE、BACKTRACK，或执行失败）"),
 }
 CODES = {
-    "OVERFIT_GAP": "验证集与 OOT-dev 的 AUC 差距超过阈值：过拟合或跨时间不稳定",
+    "OVERFIT_GAP": "验证集与 OOT-dev 的主指标差距超过阈值：过拟合或跨时间不稳定",
+    "GUARD_FAIL": "护栏指标比当前最优变差超过容差：主指标再好也不接受",
     "LEAK_SUSPECT": "疑似泄漏：单特征 AUC 过高、字段可得时间不明或字段名命中泄漏模式",
     "PSI_DRIFT": "模型分数在 OOT-dev 上的分布漂移（PSI）超过告警线",
     "SCORE_PSI": "分数 PSI 超过严重阈值，直接拒绝",
@@ -137,7 +139,7 @@ def seg_title(s: dict) -> str:
     return {"setup": "准备", "round": f"第 {s['round']} 轮", "finale": "收尾"}[s["kind"]]
 
 
-def _auc(x) -> str:
+def _num(x) -> str:
     return "—" if x is None else f"{x:.4f}"
 
 
@@ -161,12 +163,13 @@ def card(head: str, rows: list[tuple[str, str]], verdict: str | None = None, not
             f'{notes_html}<dl class="dm-rows">{body}</dl>{tail}</div>')
 
 
-def round_card(s: dict, records: list[dict], live: bool = False):
-    """一段的可读摘要：做了什么、为什么、结果如何、代码怎么判。"""
+def round_card(s: dict, records: list[dict], live: bool = False, pm: str = "auc", trials: dict | None = None):
+    """一段的可读摘要：做了什么、为什么、结果如何、代码怎么判。pm：本次运行锁定的主指标。"""
     evs = segment_evaluations(s, records)
+    ml, key = metric_label(pm), f"oot_dev_{pm}"
     if s["kind"] == PHASE_SETUP:
         dirs = plan_directions(s)
-        race = "<br>".join(f"<b>{esc(e.get('model'))}</b>　OOT-dev AUC {_auc((e.get('metrics') or {}).get('oot_dev_auc'))}　{pill(e.get('verdict'))}"
+        race = "<br>".join(f"<b>{esc(e.get('model'))}</b>　OOT-dev {ml} {_num((e.get('metrics') or {}).get(key))}　{pill(e.get('verdict'))}"
                            for e in evs)
         html_ = card('<span class="dm-step">准备</span><span class="dm-action">切分数据 · 规划方向 · 模型赛跑</span>',
                      [("规划方向", "<br>".join(f"{i}. {esc(d)}" for i, d in enumerate(dirs, 1))),
@@ -174,7 +177,9 @@ def round_card(s: dict, records: list[dict], live: bool = False):
                      pending=live and not evs)
     elif s["kind"] != PHASE_ROUND:
         f = s["final"]
-        final = (f"<b>{esc(f['exp_id'])}</b>　holdout AUC <b>{f['holdout_auc']:.4f}</b>（OOT-dev {f['oot_dev_auc']:.4f}，下降 {f['drop']:+.4f}）"
+        fm = f.get("metric", "auc") if f else pm                       # 旧运行的验收结果没有 metric 字段：当时只有 AUC
+        final = (f"<b>{esc(f['exp_id'])}</b>　holdout {metric_label(fm)} <b>{f[f'holdout_{fm}']:.4f}</b>"
+                 f"（OOT-dev {f[f'oot_dev_{fm}']:.4f}，下降 {f['drop']:+.4f}）"
                  + ("<br>⚠️ 疑似对 OOT-dev 过拟合" if f.get("overfit_to_oot_dev") else "")
                  + '<div class="dm-sub">holdout 只在这里读一次，决策过程中从未用到</div>') if f else \
             ("没有通过评估的全量训练模型，跳过验收" if any(e["type"] == "final_gate_skipped" for e in s["events"]) else "")
@@ -192,7 +197,7 @@ def round_card(s: dict, records: list[dict], live: bool = False):
         result = ""
         if ev:
             cmp = ev.get("compare")
-            result = f"<b>{esc(ev['exp_id'])}</b>　OOT-dev AUC <b>{_auc((ev.get('metrics') or {}).get('oot_dev_auc'))}</b>"
+            result = f"<b>{esc(ev['exp_id'])}</b>　OOT-dev {ml} <b>{_num((ev.get('metrics') or {}).get(key))}</b>"
             if cmp:
                 result += f"，比当前最优 {cmp['delta']:+.4f}（{'显著' if cmp['significant'] else '不显著'}）"
         elif rec and rec.get("verdict") == "NONE":
@@ -202,18 +207,38 @@ def round_card(s: dict, records: list[dict], live: bool = False):
                             ("停止", esc(stop_txt(s["stop_reason"])) if s["stop_reason"] else "")],
                      verdict=rec.get("verdict") if rec else None, notes=notes, pending=live and not rec)
     st.markdown(html_, unsafe_allow_html=True)
+    ids = [e["exp_id"] for e in evs if e.get("exp_id")]
+    if live or trials is None or not ids:
+        return
+    n = sum(len(trials.get(i, [])) for i in ids)
+    m = sum(t["state"] == "PRUNED" for i in ids for t in trials.get(i, []))
+    accepted = s["kind"] == PHASE_ROUND and (s["recorded"] or {}).get("verdict") == "ACCEPT"
+    with st.expander(f"调参过程：{n} 个 trial，其中 {m} 个被剪枝" if n else "调参过程：未保存调参过程", expanded=accepted):
+        names = {e["exp_id"]: e.get("model") for e in evs} if s["kind"] == PHASE_SETUP else None
+        ch = trial_chart(trials, ids, pm, names)
+        if ch is None:
+            st.caption("未保存调参过程")
+        else:
+            st.altair_chart(ch, use_container_width=True)
+            st.caption("Optuna 只看 valid；OOT-dev 在搜索结束后评估一次，结果见上方卡片。灰点是被剪枝的 trial。")
 
 
-def show_progress(events: list[dict], records: list[dict], state: str | None, max_rounds: int | None, running: bool):
+def show_progress(events: list[dict], records: list[dict], state: str | None, max_rounds: int | None, running: bool,
+                  trials: dict | None = None):
     trace = build_trace(events)
+    pm = primary_of(events)
     n = sum(s["kind"] == PHASE_ROUND for s in trace)
     if running:
         st.markdown(f'<div class="dm-status"><span class="dm-dot"></span>当前阶段　<b>{esc(STATES.get(state, state or "…"))}</b></div>',
                     unsafe_allow_html=True)
         if max_rounds:
             st.progress(min(n / max_rounds, 1.0), text=f"决策轮次 {n} / {max_rounds}")
+    if not running:
+        ch = metric_chart(trace, records, pm)
+        if ch is not None:
+            st.altair_chart(ch, use_container_width=True)
     for s in trace:
-        round_card(s, records, live=running)
+        round_card(s, records, live=running, pm=pm, trials=trials if not running else None)
 
 
 def legend():
@@ -223,25 +248,29 @@ def legend():
 
 
 # ---------- 完整 trace ----------
-def auc_chart(trace: list[dict], records: list[dict]):
+def metric_chart(trace: list[dict], records: list[dict], pm: str):
+    """每个实验一个点，纵轴 OOT-dev 主指标，颜色和形状表示判定；被接受的点加粗描边，一眼看出走到最终模型的路径。"""
+    y, d = f"OOT-dev {metric_label(pm)}", f"Δ{metric_label(pm)}"
     rows = [{"段": seg_title(s), "实验": e["exp_id"], "判定": e.get("verdict"), "模型": e.get("model"),
-             "训练方式": FIDELITY.get(e.get("fidelity"), e.get("fidelity")), "OOT-dev AUC": (e.get("metrics") or {}).get("oot_dev_auc"),
-             "ΔAUC": (e.get("compare") or {}).get("delta")}
+             "训练方式": FIDELITY.get(e.get("fidelity"), e.get("fidelity")), y: (e.get("metrics") or {}).get(f"oot_dev_{pm}"),
+             d: (e.get("compare") or {}).get("delta"), "接受": e.get("verdict") == "ACCEPT"}
             for s in trace for e in segment_evaluations(s, records)]
-    df = pd.DataFrame([r for r in rows if r["OOT-dev AUC"] is not None and r["判定"] in VERDICTS and VERDICTS[r["判定"]][2]])
+    df = pd.DataFrame([r for r in rows if r[y] is not None and r["判定"] in VERDICTS and VERDICTS[r["判定"]][2]])
     if df.empty:
         return None
     shown = [v for v in VERDICTS if v in set(df["判定"])]
     labels = [f"{VERDICTS[v][1]} {v}" for v in shown]
     df["判定"] = df["判定"].map(lambda v: f"{VERDICTS[v][1]} {v}")
-    return alt.Chart(df, title="每轮实验的 OOT-dev AUC（颜色和形状表示判定）").mark_point(filled=True, size=110, opacity=1).encode(
+    return alt.Chart(df, title=f"每轮实验的 {y}（颜色和形状表示判定，粗边框为被接受）").mark_point(filled=True, size=110, opacity=1).encode(
         x=alt.X("段:N", sort=list(dict.fromkeys(df["段"])), title=None, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("OOT-dev AUC:Q", scale=alt.Scale(zero=False)),
+        y=alt.Y(f"{y}:Q", scale=alt.Scale(zero=False)),
+        stroke=alt.condition(alt.datum.接受, alt.value("#1f1f1f"), alt.value(None)),
+        strokeWidth=alt.condition(alt.datum.接受, alt.value(2.5), alt.value(0)),
         color=alt.Color("判定:N", scale=alt.Scale(domain=labels, range=[VERDICTS[v][2] for v in shown]),
                         legend=alt.Legend(orient="top", title=None)),
         shape=alt.Shape("判定:N", scale=alt.Scale(domain=labels, range=[VERDICTS[v][3] for v in shown]), legend=None),
-        tooltip=["段", "实验", "判定", "模型", "训练方式", alt.Tooltip("OOT-dev AUC:Q", format=".4f"),
-                 alt.Tooltip("ΔAUC:Q", format="+.4f")],
+        tooltip=["段", "实验", "判定", "模型", "训练方式", alt.Tooltip(f"{y}:Q", format=".4f"),
+                 alt.Tooltip(f"{d}:Q", format="+.4f")],
     ).properties(height=260)
 
 
@@ -259,17 +288,18 @@ def show_decision(s: dict):
     st.json(d.get("params") or {}, expanded=False)
 
 
-def show_evaluations(s: dict, records: list[dict]):
+def show_evaluations(s: dict, records: list[dict], pm: str):
     evs = segment_evaluations(s, records)
+    ml = metric_label(pm)
     if not evs:
         st.caption("本段没有评估结果。")
     for e in evs:
         m, cmp = e.get("metrics") or {}, e.get("compare")
         fmt = lambda k, f: format(m[k], f) if m.get(k) is not None else "—"
         st.markdown(f"**{e['exp_id']}**（{e.get('model') or '?'} · {FIDELITY.get(e.get('fidelity'), e.get('fidelity') or '?')}）　{verdict_txt(e.get('verdict'))}")
-        st.markdown(f"valid AUC {fmt('valid_auc', '.4f')} · OOT-dev AUC {fmt('oot_dev_auc', '.4f')} · 分数 PSI {fmt('score_psi', '.3f')}")
+        st.markdown(f"valid {ml} {fmt(f'valid_{pm}', '.4f')} · OOT-dev {ml} {fmt(f'oot_dev_{pm}', '.4f')} · 分数 PSI {fmt('score_psi', '.3f')}")
         if cmp:
-            st.caption(f"配对 bootstrap：ΔAUC {cmp['delta']:+.4f}，95% 区间 [{cmp['ci_low']:+.4f}, {cmp['ci_high']:+.4f}]，"
+            st.caption(f"配对 bootstrap：Δ{ml} {cmp['delta']:+.4f}，95% 区间 [{cmp['ci_low']:+.4f}, {cmp['ci_high']:+.4f}]，"
                        f"α={cmp['alpha']:.4f}（第 {cmp.get('k')} 次使用 OOT-dev），{'显著' if cmp['significant'] else '不显著'}；对照 {e.get('baseline')}")
         if e.get("codes"):
             st.markdown(codes_md(e["codes"]))
@@ -297,14 +327,12 @@ def show_llm_calls(s: dict, has_llm_events: bool):
 
 def show_full_trace(events: list[dict], records: list[dict]):
     trace = build_trace(events)
+    pm = primary_of(events)
+    y, d = f"OOT-dev {metric_label(pm)}", f"Δ{metric_label(pm)}"
     has_llm = any(e["type"] == "llm_call" for e in events)
     st.markdown("#### 完整 trace")
-    ch = auc_chart(trace, records)
-    if ch is not None:
-        st.altair_chart(ch, use_container_width=True)
-    st.dataframe(pd.DataFrame(round_rows(trace, records)), hide_index=True, use_container_width=True,
-                 column_config={"OOT-dev AUC": st.column_config.NumberColumn(format="%.4f"),
-                                "ΔAUC": st.column_config.NumberColumn(format="%+.4f")})
+    st.dataframe(pd.DataFrame(round_rows(trace, records, pm)), hide_index=True, use_container_width=True,
+                 column_config={y: st.column_config.NumberColumn(format="%.4f"), d: st.column_config.NumberColumn(format="%+.4f")})
     for s in trace:
         d, r = s["decision"] or {}, s["recorded"] or {}
         with st.expander(" · ".join(x for x in (seg_title(s), d.get("action"), r.get("verdict")) if x)):
@@ -313,7 +341,7 @@ def show_full_trace(events: list[dict], records: list[dict]):
             with t[0]:
                 show_decision(s)
             with t[1]:
-                show_evaluations(s, records)
+                show_evaluations(s, records, pm)
             with t[2]:
                 show_llm_calls(s, has_llm)
             with t[3]:
@@ -335,7 +363,8 @@ def friendly_error(e: Exception) -> str:
     return "运行中出错。"
 
 
-def live_run(provider: str, api_key: str | None, max_rounds: int, box) -> dict:
+def live_run(provider: str, api_key: str | None, max_rounds: int, box, dataset: str = "hotel_bookings", prepare=None) -> dict:
+    """prepare(cfg) -> cfg：建任务之前改 cfg（接入页用它注册生成的数据集）。"""
     from agent.llm import make_llm
     from agent.orchestrator import Orchestrator
     from agent.schemas import TaskSpec
@@ -349,14 +378,16 @@ def live_run(provider: str, api_key: str | None, max_rounds: int, box) -> dict:
     cfg["fidelity"]["full"]["n_trials"], cfg["run"]["max_rounds"] = 5, max_rounds
     cfg["memory"]["db"] = str(sample_art() / f"memory_{provider}.db")    # mock 的经验不混进真实模型的上下文
     Path(cfg["paths"]["artifacts_root"]).mkdir(parents=True, exist_ok=True)
+    if prepare:
+        cfg = prepare(cfg)
     tid = f"live_{provider}_{time.strftime('%m%d_%H%M%S')}"
     out = {"task_id": tid, "error": None, "state": "FAILED"}
     o = tracer = None
     try:
         llm = make_llm(provider, cfg, api_key=api_key)
-        spec = TaskSpec.from_knowhow("hotel_bookings", cfg, autonomy="L0")    # 无人值守：页面上不处理人工审批
-        tracer = make_tracer(tid, {"dataset": "hotel_bookings（样本）", "llm": provider, "source": "app"})
-        o = Orchestrator(spec, cfg, llm, FinalGate("hotel_bookings", cfg, tid), tid, tracer=tracer)
+        spec = TaskSpec.from_knowhow(dataset, cfg, autonomy="L0")    # 无人值守：页面上不处理人工审批
+        tracer = make_tracer(tid, {"dataset": f"{dataset}（样本）", "llm": provider, "source": "app"})
+        o = Orchestrator(spec, cfg, llm, FinalGate(dataset, cfg, tid), tid, tracer=tracer)
         while o.state not in TERMINAL and o.state != State.AWAIT_HUMAN:
             with box.container():
                 show_progress(o.events.query(), [], o.state.value, max_rounds, running=True)
@@ -368,8 +399,92 @@ def live_run(provider: str, api_key: str | None, max_rounds: int, box) -> dict:
     out["langfuse"] = (tracer.url() or "enabled") if tracer is not None and tracer.enabled else None
     out["events"] = o.events.query() if o else []
     out["records"] = [r.model_dump(mode="json") for r in o.store.all(tid)] if o else []
+    db = Path(cfg["paths"]["artifacts_root"]) / "optuna.db"
+    out["trials"] = load_trials(str(db), [r["exp_id"] for r in out["records"]]) if db.exists() else {}
     box.empty()
     return out
+
+
+def show_live_result(res: dict, toggle_key: str):
+    if res["error"]:
+        st.error(f"{res['error'][0]}（已跑完的部分保留在下面）")
+        with st.expander("错误详情"):
+            st.code(res["error"][1])
+    else:
+        sm = summarize(build_trace(res["events"]))
+        msg = f"{res['task_id']} 结束，最终状态 {res['state']}；{sm['n_rounds']} 轮决策，停止原因：{stop_txt(sm['stop_reason'])}"
+        (st.success if res["state"] == "DONE" else st.warning)(msg)       # FAILED（如决策连续校验失败）不能显示成成功
+    if res.get("langfuse"):
+        st.markdown(f"已上报 Langfuse：[打开这次运行的 trace]({res['langfuse']})" if res["langfuse"].startswith("http")
+                    else f"已上报 Langfuse，可按 session `{res['task_id']}` 搜索。")
+    legend()
+    show_progress(res["events"], res["records"], None, None, running=False, trials=res.get("trials") or {})
+    if res["events"] and st.toggle("显示完整 trace（逐轮表、LLM 原文、原始事件）", key=toggle_key):
+        show_full_trace(res["events"], res["records"])
+
+
+# ---------- 接入新数据 ----------
+INTAKE_REC = ROOT / "examples" / "traces" / "intake" / "intake_hotel_deepseek.json"
+
+
+def show_intake_events(events: list[dict]):
+    """按轮展示接入会话：画像 → 每轮草稿要点、校验错误、问题 → 用户回答。"""
+    for rnd, evs in intake_rounds(events):
+        by = {e["type"]: e["payload"] for e in evs}
+        if rnd == 0:
+            p = by["profile"]
+            st.markdown(f"**数据画像**（代码计算，LLM 只看这份统计，不看原始数据行）：{p['n_rows']:,} 行 · {len(p['columns'])} 列 · "
+                        f"候选日期列 {', '.join(p['date_candidates'])} · 候选标签列 {', '.join(p['label_candidates'])}")
+            continue
+        with st.container(border=True):
+            st.markdown(f"**第 {rnd} 轮起草**")
+            for e in evs:
+                if e["type"] == "validation_failed":
+                    st.warning("草稿未通过校验，错误已回灌给 LLM 重写：" + "；".join(x[:160] for x in e["payload"]["errors"]))
+            if "draft" in by:
+                st.dataframe(pd.DataFrame(draft_rows(by["draft"]), columns=["项", "草稿"]), hide_index=True, use_container_width=True)
+            qs = by.get("questions") or []
+            if qs:
+                st.markdown("**追问**（" + "、".join(q_label(q["key"]) for q in qs) + "）")
+                st.dataframe(pd.DataFrame([{"类型": "必答项" if q["key"] in REQUIRED_KEYS else "字段", "问题": q["question"],
+                                            "LLM 推荐": q["recommended"]} for q in qs]), hide_index=True, use_container_width=True)
+            elif "written" in by:
+                st.success("没有待确认的问题，校验通过，写出配置。")
+            calls = [e["payload"] for e in evs if e["type"] == "llm_call"]
+            with st.expander(f"本轮 LLM 回复原文（{len(calls)} 次）"):
+                for c in calls:
+                    st.code(c["response"], language="json")
+        ans = next((e["payload"] for e in events if e["type"] == "answers" and e["round"] == rnd), None)
+        if ans:
+            st.markdown("**用户回答**")
+            st.dataframe(pd.DataFrame([{"问题": q_label(k), "回答": v} for k, v in ans.items()]), hide_index=True, use_container_width=True)
+
+
+def show_compare(c: dict):
+    st.markdown("**与手写配置对比**（两边都经过切分时同一套字段规则）")
+    k = st.columns(3)
+    k[0].metric("泄漏字段识别", f"{len(c['leak_found'])} / {len(c['leak_ref'])}")
+    k[1].metric("存疑字段隔离", f"{len(c['quarantine_found'])} / {len(c['quarantine_ref'])}")
+    k[2].metric("可得时间一致", f"{c['availability_agree']:.1%}")
+    miss = c["leak_missed"] + c["quarantine_missed"] + c["meta_missed"]
+    if miss:
+        st.caption("没识别出来的：" + "、".join(miss) + "。这些字段会进入模型，所以真实接入时仍需要人复核可得时间。")
+    if c["disagreements"]:
+        st.dataframe(pd.DataFrame(c["disagreements"]).rename(columns={"field": "字段", "generated": "agent 判断", "reference": "手写配置"}),
+                     hide_index=True, use_container_width=True)
+
+
+def replay_prepare(rec: dict):
+    """把录制里写出的 YAML 放到运行时目录（不动仓库的 knowhow/），再注册进 cfg。"""
+    def prep(cfg):
+        from intake.writer import register
+        out = sample_art() / "intake" / "replay"
+        kd = out / "knowhow" / rec["dataset_id"]
+        kd.mkdir(parents=True, exist_ok=True)
+        for n, t in rec["written"]["yaml"].items():
+            (kd / n).write_text(t)
+        return register(cfg, {**rec["written"], "knowhow_root": str(out / "knowhow"), "csv": str(SAMPLE_CSV)})
+    return prep
 
 
 # ---------- 页面 ----------
@@ -455,7 +570,8 @@ with st.expander("哪些字段 agent 能用、哪些会被隔离（know-how 标�
     st.dataframe(load_fields(), hide_index=True, use_container_width=True)
 st.write("")
 
-tab_replay, tab_live = st.tabs(["① 历史回放：真实 LLM 的一次运行", "② 现场运行：现在跑一次"])
+tab_replay, tab_live, tab_intake = st.tabs(["① 历史回放：真实 LLM 的一次运行", "② 现场运行：现在跑一次",
+                                            "③ 接入新数据：从数据和说明生成配置"])
 
 with tab_replay:
     names = example_names()
@@ -503,8 +619,8 @@ with tab_replay:
         if name in done:
             st.success(f"回放结束：{sm['n_rounds']} 轮决策，停止原因：{stop_txt(sm['stop_reason'])}")
             legend()
-            show_progress(events, records, None, None, running=False)
-            if st.toggle("显示完整 trace（图表、逐轮表、LLM 原文、原始事件）", key="full_replay"):
+            show_progress(events, records, None, None, running=False, trials=ex.get("trials") or {})
+            if st.toggle("显示完整 trace（逐轮表、LLM 原文、原始事件）", key="full_replay"):
                 show_full_trace(events, records)
 
 with tab_live:
@@ -541,23 +657,91 @@ with tab_live:
         legend()
         st.session_state["live"] = live_run(provider, api_key, rounds, st.empty())
         st.rerun()
-    res = st.session_state.get("live")
-    if res:
-        if res["error"]:
-            st.error(f"{res['error'][0]}（已跑完的部分保留在下面）")
-            with st.expander("错误详情"):
-                st.code(res["error"][1])
-        else:
-            sm = summarize(build_trace(res["events"]))
-            msg = f"{res['task_id']} 结束，最终状态 {res['state']}；{sm['n_rounds']} 轮决策，停止原因：{stop_txt(sm['stop_reason'])}"
-            (st.success if res["state"] == "DONE" else st.warning)(msg)       # FAILED（如决策连续校验失败）不能显示成成功
-        if res.get("langfuse"):
-            st.markdown(f"已上报 Langfuse：[打开这次运行的 trace]({res['langfuse']})" if res["langfuse"].startswith("http")
-                        else f"已上报 Langfuse，可按 session `{res['task_id']}` 搜索。")
-        legend()
-        show_progress(res["events"], res["records"], None, None, running=False)
-        if res["events"] and st.toggle("显示完整 trace（图表、逐轮表、LLM 原文、原始事件）", key="full_live"):
-            show_full_trace(res["events"], res["records"])
+    if st.session_state.get("live"):
+        show_live_result(st.session_state["live"], "full_live")
+
+with tab_intake:
+    st.markdown("上传一张表和一段业务说明，agent 先看代码算出的数据画像，起草建模配置，再追问它不能自行假设的内容。"
+                "标签、预测时点、切分窗口、指标四项是**必答项**：LLM 给了推荐也必须由人确认，由代码强制。"
+                "时间表达式在 DuckDB 里实跑校验，切分后每段都要有正负样本；通过后写出与手写格式相同的配置，接着走同一套建模流程。")
+    mode = st.radio("方式", ["回放一次真实的接入会话", "现场接入（需要 API key）"], horizontal=True, key="intake_mode",
+                    label_visibility="collapsed")
+    if mode.startswith("回放"):
+        rec = json.loads(INTAKE_REC.read_text())
+        st.caption(f"录制：{rec['model']} · 酒店样本 · 业务方的回答依据仓库里手写的配置如实给出，LLM 没问到的不主动透露。")
+        with st.expander("业务说明原文"):
+            st.markdown(rec["description"])
+        if st.button("▶ 回放接入过程", type="primary", key="intake_replay"):
+            st.session_state["intake_shown"] = True
+        if st.session_state.get("intake_shown"):
+            show_intake_events(rec["events"])
+            for n, t in rec["written"]["yaml"].items():
+                with st.expander(n):
+                    st.code(t, language="yaml")
+            show_compare(rec["compare"])
+            st.markdown("**用这份配置建模**：生成的配置放到运行时目录，用 mock LLM 从头跑一遍（约 10 秒），证明它能直接用。")
+            if st.button("▶ 用这份配置跑一次", key="intake_run"):
+                legend()
+                st.session_state["intake_live"] = live_run("mock", None, 2, st.empty(), dataset=rec["dataset_id"],
+                                                           prepare=replay_prepare(rec))
+                st.rerun()
+            if st.session_state.get("intake_live"):
+                show_live_result(st.session_state["intake_live"], "full_intake")
+    else:
+        from data.knowhow import load_config
+        real = {v: k for k, v in PROVIDERS.items() if k != "mock"}
+        prov = real[st.selectbox("用哪个 LLM 起草", list(real), key="intake_provider")]
+        pcfg = load_config()["llm"]["providers"][prov]
+        key = st.text_input(f"API key（模型 {pcfg['model']}）", type="password", key="intake_key",
+                            help="只在本次页面会话中使用：不写盘、不进日志、不放进 URL。") or None
+        up = st.file_uploader("数据文件（CSV）", type="csv", key="intake_csv")
+        desc = st.text_area("业务说明", (SAMPLE_CSV.parent / "业务说明.md").read_text(), height=220, key="intake_desc")
+        ready = bool(up) and (bool(key) or bool(os.environ.get(pcfg["key_env"])))
+        if st.button("▶ 开始接入", type="primary", key="intake_start", disabled=not ready):
+            from agent.llm import make_llm
+            from intake.session import IntakeSession
+            p = sample_art() / "intake" / "upload.csv"
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(up.getvalue())
+            for k in ("intake_live2", "intake_langfuse"):             # 新的接入会话：清掉上一次的结果
+                st.session_state.pop(k, None)
+            s = IntakeSession(make_llm(prov, load_config(), api_key=key), str(p), desc, "user_data", str(sample_art() / "intake" / "live"))
+            with st.spinner("LLM 起草中…"):
+                st.session_state["intake_qs"] = s.step()
+            st.session_state["intake_session"] = s
+        s = st.session_state.get("intake_session")
+        if s:
+            show_intake_events(s.events)
+            qs = st.session_state.get("intake_qs") or []
+            if qs:
+                with st.form("intake_answers"):
+                    st.markdown("**请回答**（默认填的是 LLM 的推荐，采纳就直接提交）")
+                    replies = {q.key: st.text_input(("【必答项】" if q.key in REQUIRED_KEYS else "") + q.question, q.recommended,
+                                                    key=f"ans_{q.key}") for q in qs}
+                    if st.form_submit_button("提交回答"):
+                        s.answer(replies)
+                        with st.spinner("LLM 根据回答修改草稿…"):
+                            st.session_state["intake_qs"] = s.step()
+                        st.rerun()
+            elif s.written:
+                if "intake_langfuse" not in st.session_state:          # 写出配置后上报一次（配了 LANGFUSE_* 才会上报）
+                    from intake.tracing import report_intake
+                    from runtime.tracing import langfuse_client
+                    lf = langfuse_client()
+                    tid = report_intake({"dataset_id": s.dataset_id, "llm": prov, "model": pcfg["model"], "description": s.description,
+                                         "events": s.events, "written": s.written}, lf)
+                    st.session_state["intake_langfuse"] = lf.get_trace_url(trace_id=tid) if tid else None
+                if st.session_state["intake_langfuse"]:
+                    st.markdown(f"已上报 Langfuse：[打开这次接入的 trace]({st.session_state['intake_langfuse']})")
+                for n, t in s.written["yaml"].items():
+                    with st.expander(n):
+                        st.code(t, language="yaml")
+                if st.button("▶ 用这份配置跑一次", key="intake_live_run"):
+                    legend()
+                    st.session_state["intake_live2"] = live_run("mock", None, 2, st.empty(), dataset=s.dataset_id, prepare=s.register)
+                    st.rerun()
+                if st.session_state.get("intake_live2"):
+                    show_live_result(st.session_state["intake_live2"], "full_intake_live")
 
 with st.expander("判定与诊断码说明"):
     st.markdown("\n".join(f"- {v[0]} **{v[1]}** `{k}`：{v[4]}" for k, v in VERDICTS.items()))

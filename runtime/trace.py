@@ -90,28 +90,39 @@ def segment_evaluations(seg: dict, records: list[dict] | None = None) -> list[di
     else:
         pick = [r for r in records if seg["recorded"] and r.get("exp_id") == seg["recorded"]["exp_id"]]
     return [{"exp_id": r["exp_id"], "verdict": r.get("verdict"), "codes": r.get("diagnosis_codes") or [],
-             "metrics": {k: (r.get("metrics") or {}).get(k) for k in ("valid_auc", "oot_dev_auc", "score_psi")},
+             "metrics": {k: v for k, v in (r.get("metrics") or {}).items() if k.startswith(("valid_", "oot_dev_")) or k == "score_psi"},
              "model": (r.get("config") or {}).get("model"), "fidelity": r.get("fidelity"), "compare": None,
              "source": "record"} for r in pick if r.get("verdict") != "NONE"]
 
 
-def round_rows(trace: list[dict], records: list[dict] | None = None) -> list[dict]:
-    """每段一行的表格视图（给 UI 用）。records 可选，见 segment_evaluations。"""
+def round_rows(trace: list[dict], records: list[dict] | None = None, pm: str = "auc") -> list[dict]:
+    """每段一行的表格视图（给 UI 用）。records 可选，见 segment_evaluations。pm：主指标（旧运行只有 AUC）。"""
+    label = {"auc": "AUC", "pr_auc": "PR-AUC", "ks": "KS"}[pm]
     out = []
     for s in trace:
         d, r = s["decision"] or {}, s["recorded"] or {}
         evs = segment_evaluations(s, records)
         if r:                                     # 本轮记录的实验对应的评估
             ev = next((x for x in reversed(evs) if x["exp_id"] == r.get("exp_id")), {})
-        else:                                     # 准备阶段（模型赛跑）：取 OOT-dev AUC 最高的一个
-            ev = max(evs, key=lambda x: (x.get("metrics") or {}).get("oot_dev_auc") or -1, default={})
+        else:                                     # 准备阶段（模型赛跑）：取 OOT-dev 主指标最高的一个
+            ev = max(evs, key=lambda x: (x.get("metrics") or {}).get(f"oot_dev_{pm}") or -1, default={})
         cmp = ev.get("compare") or {}
         out.append({"段": {"setup": "准备", "round": f"第 {s['round']} 轮", "finale": "收尾"}[s["kind"]],
                     "动作": d.get("action") or ("RACE" if s["kind"] == PHASE_SETUP and evs else None),
                     "实验": r.get("exp_id") or ", ".join(x["exp_id"] for x in evs if x["exp_id"]) or None,
                     "结论": r.get("verdict") or (ev.get("verdict") if s["kind"] == PHASE_SETUP else None),
-                    "OOT-dev AUC": (ev.get("metrics") or {}).get("oot_dev_auc"), "ΔAUC": cmp.get("delta"),
+                    f"OOT-dev {label}": (ev.get("metrics") or {}).get(f"oot_dev_{pm}"), f"Δ{label}": cmp.get("delta"),
                     "诊断码": ", ".join(r.get("codes") or ev.get("codes") or []) or None,
                     "LLM 调用": len(s["llm_calls"]), "被拒": len(s["rejected"]), "tokens": s["tokens"],
                     "耗时(s)": round(s["ts_end"] - s["ts_start"], 2) if s["ts_start"] is not None else None})
     return out
+
+
+def load_trials(optuna_db: str, exp_ids: list[str]) -> dict:
+    """每个实验一个 Optuna study（study 名 = exp_id）。value 是 valid 上的主指标；被剪枝的 trial 也保留，页面画成灰色。"""
+    import optuna
+    storage = f"sqlite:///{optuna_db}"
+    names = {s.study_name for s in optuna.get_all_study_summaries(storage)}
+    return {e: [{"n": t.number, "value": t.value, "state": t.state.name, "params": t.params}
+                for t in optuna.load_study(study_name=e, storage=storage).trials]
+            for e in exp_ids if e in names}

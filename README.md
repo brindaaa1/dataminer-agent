@@ -7,7 +7,7 @@ DataMiner Agent 面向表格数据的自动建模：给定一张表和建模目�
 ## 快速开始
 
 ```bash
-git clone https://github.com/brindaaa1/dataminer-agent && cd dataminer-agent
+git clone -b feature/flexible-modeling https://github.com/brindaaa1/dataminer-agent && cd dataminer-agent
 pip install -r requirements.txt
 streamlit run app.py
 ```

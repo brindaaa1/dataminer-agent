@@ -91,3 +91,18 @@ Optuna study 存在 SQLite 里，直接用官方 dashboard 看每个 trial 的�
 ```bash
 optuna-dashboard sqlite:///artifacts/optuna.db
 ```
+
+## 工作台
+
+上传数据和业务说明 → 对话确认配置 → 看建模过程（可中止、续跑）→ 确认报告并打包下载。
+
+    pip install -r requirements.txt
+    cd web && npm install && npm run build && cd ..
+    uvicorn server.app:app --port 8000          # 打开 http://127.0.0.1:8000
+
+- 不填 key：LLM 选 mock，上传 `data_sample/hotel_bookings/` 下的 CSV 和业务说明即可走完整流程（mock 的接入起草直接给出 hotel 的手写配置）。
+- 用真实模型：在 `.env` 里配好对应 provider 的 key，界面上选 provider。
+- 左侧任务栏的"示例"是录制的真实运行，只读，不需要 key。
+- 每个任务的数据、配置、事件和产出都在 `workspace/tasks/<任务 id>/`；跨任务经验库在 `workspace/memory.db`。
+- 开发前端：另开终端 `cd web && npm run dev`，`/api` 会代理到 8000 端口；后端改代码用 `uvicorn server.app:app --reload`。
+- 测试：`python -m pytest -q`（后端）、`cd web && npm test`（前端组件）、`cd web && npm run e2e`（端到端，用 mock 走完整流程）。

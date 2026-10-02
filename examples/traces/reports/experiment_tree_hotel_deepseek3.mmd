@@ -1,0 +1,20 @@
+flowchart TD
+  ROOT((start))
+  n_hotel_deepseek3_race_lgbm["hotel_deepseek3_race_lgbm<br/>RACE [low]<br/>AUC 0.8410<br/>PROMISING<br/>PSI_DRIFT"]:::promising
+  n_hotel_deepseek3_race_lr_scorecard["hotel_deepseek3_race_lr_scorecard<br/>RACE [low]<br/>AUC 0.8281<br/>INCONCLUSIVE<br/>PLATEAU"]:::inconclusive
+  n_hotel_deepseek3_e01["hotel_deepseek3_e01<br/>PROMOTE_FIDELITY [full]<br/>AUC 0.8325 (-0.0085)<br/>REJECT<br/>OVERFIT_GAP"]:::reject
+  n_hotel_deepseek3_e02["hotel_deepseek3_e02<br/>TUNE [low]<br/>AUC 0.8402 (-0.0008)<br/>PROMISING"]:::promising
+  n_hotel_deepseek3_e03["hotel_deepseek3_e03<br/>PROMOTE_FIDELITY [full]<br/>AUC 0.8351 (-0.0051)<br/>REJECT<br/>OVERFIT_GAP"]:::reject
+  n_hotel_deepseek3_e04["hotel_deepseek3_e04<br/>PROMOTE_FIDELITY [full]<br/>AUC 0.8162 (-0.0119)<br/>ACCEPT"]:::accept
+  ROOT --> n_hotel_deepseek3_race_lgbm
+  ROOT --> n_hotel_deepseek3_race_lr_scorecard
+  n_hotel_deepseek3_race_lgbm --> n_hotel_deepseek3_e01
+  n_hotel_deepseek3_race_lgbm --> n_hotel_deepseek3_e02
+  n_hotel_deepseek3_e02 --> n_hotel_deepseek3_e03
+  n_hotel_deepseek3_race_lr_scorecard --> n_hotel_deepseek3_e04
+  classDef accept fill:#c8e6c9,stroke:#2e7d32
+  classDef reject fill:#ffcdd2,stroke:#c62828
+  classDef inconclusive fill:#fff9c4,stroke:#f9a825
+  classDef promising fill:#bbdefb,stroke:#1565c0
+  classDef none fill:#eeeeee,stroke:#757575
+  classDef accept_inv,reject_inv,inconclusive_inv,promising_inv,none_inv fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray:4 3

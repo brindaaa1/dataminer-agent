@@ -28,7 +28,7 @@ export default function App() {
           <Chat snap={snap.data ?? null} onCreated={select} />
         </section>
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border">
-          {snap.data ? <Workspace snap={snap.data} />
+          {snap.data ? <Workspace snap={snap.data} onSelect={select} />
             : <p className="m-auto text-sm text-muted-foreground">新建任务，或在左侧选一个（示例任务可以直接看）。</p>}
         </section>
       </main>

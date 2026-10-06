@@ -38,14 +38,19 @@ def diagnose(metrics: dict, cfg: dict, *, n_features: int, score_psi: float | No
              leak_pattern_hits: list | None = None, history_verdicts: list | None = None,
              remaining_budget_frac: float | None = None, best_iter: int | None = None,
              n_rounds_max: int | None = None, data_fatal: bool = False, oom: bool = False,
-             model: str = "lgbm") -> dict:
+             model: str = "lgbm", reference_gap: float | None = None, n_raw_features: int | None = None) -> dict:
     """返回 {"codes": [...], "details": {code: ...}}。所有阈值来自 config.evaluator。"""
     c = cfg["evaluator"]
     codes, det = [], {}
 
     pm = primary(cfg)
     gap = metrics[f"valid_{pm}"] - metrics[f"oot_dev_{pm}"]
-    if gap > METRICS[pm].gap_max:
+    rule = c.get("overfit_gap", {})
+    if rule.get("mode") == "relative" and reference_gap is not None:     # 超过本数据正常的时间漂移 + 容差才算过拟合
+        if gap - reference_gap > rule["tolerance"]:
+            codes.append("OVERFIT_GAP")
+            det["OVERFIT_GAP"] = {"metric": pm, "gap": gap, "reference_gap": reference_gap, "excess": gap - reference_gap}
+    elif gap > METRICS[pm].gap_max:
         codes.append("OVERFIT_GAP"); det["OVERFIT_GAP"] = {"metric": pm, "gap": gap}
 
     leak = {}
@@ -75,14 +80,17 @@ def diagnose(metrics: dict, cfg: dict, *, n_features: int, score_psi: float | No
         codes.append("DATA_FATAL")
     if oom:
         codes.append("OOM")
-    if n_features > c["max_features"]:
+    if n_raw_features is not None:          # 按新增特征数算：原始数据本身就宽（home_credit 122 个）不算失控（v5 评测）
+        if n_features - n_raw_features > c["max_added_features"]:
+            det["TOO_MANY_FEATURES"] = {"n_features": n_features, "n_added": n_features - n_raw_features}
+    elif n_features > c["max_features"]:
         det["TOO_MANY_FEATURES"] = {"n_features": n_features}
     return {"codes": codes, "details": det}
 
 
 # 诊断码 → 候选动作（策略先验，§4.8；DECIDE 默认从中选择）
 POLICY_PRIOR = {
-    "OVERFIT_GAP": ["PRUNE_FEATURES", "TUNE", "SWITCH_MODEL"],
+    "OVERFIT_GAP": ["TUNE", "PRUNE_FEATURES", "SWITCH_MODEL"],
     "LEAK_SUSPECT": ["ESCALATE_HUMAN"],
     "PSI_DRIFT": ["PRUNE_FEATURES"],
     "PLATEAU": ["EXPAND_FEATURES", "TUNE", "SWITCH_MODEL"],     # 调参挖不动：换一个归纳偏置
@@ -92,6 +100,7 @@ POLICY_PRIOR = {
     "DATA_FATAL": ["ESCALATE_HUMAN"],
     "OOM": ["TUNE", "SWITCH_MODEL"],
     "NO_FINAL_MODEL": ["PROMOTE_FIDELITY"],
+    "PROMOTE_CANDIDATE": ["PROMOTE_FIDELITY"],     # 已有最终模型，又有低保真结果比对照好、还没升过
     "GUARD_FAIL": ["TUNE", "SWITCH_MODEL"],
 }
 
@@ -111,11 +120,24 @@ def promotable(recs, pm: str) -> list[dict]:
             for r in _promotable_recs(recs)]
 
 
-def decision_codes(p: dict, recs) -> list[str]:
+def decision_codes(p: dict, recs, rounds_left: int | None = None) -> list[str]:
     """DECIDE 看到的诊断码 = 上一个实验的诊断 + 任务级状态。
     NO_FINAL_MODEL：还没有全保真度的最优模型，但已有可升级的低保真实验。只有全保真度实验能被 ACCEPT，
     不升保真度就不会有最终模型（hotel_deepseek1 连跑 5 轮低保真调参，最后没有模型）。上下文和校验都用这个函数，保证一致。"""
     codes = list(p.get("last_codes", []))
-    if not p.get("best_exp_id") and _promotable_recs(recs):
+    # 刚有一个全量复验因 OVERFIT_GAP 被拒：先收紧复杂度（TUNE 等）再升，不把"升下一个候选"放进先验
+    # （v0 评测 hotel s0：连升三个 gap 一样大的候选全被拒，最后没有模型）。只剩最后一轮时仍要求升一个。
+    regularize = (bool(recs) and recs[-1].action_type == "PROMOTE_FIDELITY" and "OVERFIT_GAP" in recs[-1].diagnosis_codes
+                  and (rounds_left is None or rounds_left >= 2))
+    if not p.get("best_exp_id") and _promotable_recs(recs) and not regularize:
         codes.append("NO_FINAL_MODEL")
+    if p.get("best_exp_id") and promote_candidates(p, recs):
+        codes.append("PROMOTE_CANDIDATE")
     return codes
+
+
+def promote_candidates(p: dict, recs) -> list[str]:
+    """有了最终模型之后，低保真结果比对照好（PROMISING，或不确定但点估计更高；RECORD 时记进 p["promote_hint"]）、还没升过的。
+    v5 评测 home_credit s0/s1：这类结果 agent 没去升全量、继续调参，加特征的收益就到不了最终模型。"""
+    ok = {r.exp_id for r in _promotable_recs(recs)}
+    return [e for e in p.get("promote_hint", []) if e in ok]

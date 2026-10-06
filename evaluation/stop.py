@@ -12,7 +12,8 @@ def stop_check(*, cfg, oot_budget, round_no: int, max_rounds: int, remaining: di
     if round_no >= max_rounds:
         return "MAX_ROUNDS"
     n = cfg["evaluator"]["no_progress_rounds"]
-    if len(history_verdicts) >= n and all(v in ("REJECT", "INCONCLUSIVE") for v in history_verdicts[-n:]):
+    # 还没有最终模型（best_score 为空）时不提前停：停了就一定没有模型；轮数上限仍然兜底
+    if best_score is not None and len(history_verdicts) >= n and all(v in ("REJECT", "INCONCLUSIVE") for v in history_verdicts[-n:]):
         return "NO_PROGRESS"
     if oot_budget.exhausted:
         return "OOT_BUDGET_EXHAUSTED"
@@ -21,3 +22,11 @@ def stop_check(*, cfg, oot_budget, round_no: int, max_rounds: int, remaining: di
     if llm_stop:
         return "LLM_STOP"                      # 软停止：仅当上面所有硬条件都未触发
     return None
+
+
+def history_mark(verdict: str, fidelity: str | None, delta: float | None) -> str:
+    """记入 history_verdicts 的标记。低保真、不确定、但点估计比对照好 → INCONCLUSIVE_UP，不计入 NO_PROGRESS：
+    它可以升全量复验，连续 3 轮就停会让 agent 没机会去升（v4 评测 lending_club）。"""
+    if verdict == "INCONCLUSIVE" and fidelity == "low" and delta is not None and delta > 0:
+        return "INCONCLUSIVE_UP"
+    return verdict

@@ -11,7 +11,7 @@ from evaluation.compare import _auc, paired_bootstrap
 from evaluation.evaluator import Evaluator, Verdict, scan_features
 from evaluation.guardrails import diagnose, psi, single_feature_auc
 from evaluation.oot_budget import OOTBudget, OOTBudgetExhausted
-from evaluation.stop import stop_check
+from evaluation.stop import history_mark, stop_check
 
 CFG = load_config()
 M = {"train_auc": .8, "valid_auc": .7, "oot_dev_auc": .69, "gap": .01, "score_psi": .02}
@@ -75,7 +75,39 @@ def test_stop_check_oot_budget_and_others(tmp_path):
     b.consume()
     assert stop_check(**kw) == "OOT_BUDGET_EXHAUSTED"
     assert stop_check(**{**kw, "remaining": {**rem, "tokens": 0}}) == "BUDGET_EXHAUSTED"
-    assert stop_check(**{**kw, "history_verdicts": ["REJECT"] * 3}) == "NO_PROGRESS"
+    assert stop_check(**{**kw, "history_verdicts": ["REJECT"] * 3, "best_score": 0.8}) == "NO_PROGRESS"
+
+
+def test_no_progress_does_not_stop_while_there_is_no_final_model(tmp_path):
+    """还没有任何最终模型时，连续 REJECT 不提前停：停了就一定没有模型（v0 评测 hotel s0：3 轮全量复验都被 OVERFIT_GAP 拒后停在第 3 轮）。
+    轮数上限仍然生效。"""
+    b = OOTBudget({"oot_budget": {"alpha_0": .05, "max_compares": 9, "policy": "log"}}, str(tmp_path / "s.db"), "t")
+    kw = dict(cfg=CFG, oot_budget=b, round_no=3, max_rounds=5, remaining={"tokens": 1, "cpu_minutes": 1, "wall_minutes": 1},
+              history_verdicts=["REJECT"] * 3)
+    assert stop_check(**kw) is None
+    assert stop_check(**{**kw, "round_no": 5}) == "MAX_ROUNDS"
+
+
+def test_low_fidelity_gain_without_significance_does_not_count_as_no_progress(tmp_path):
+    """v4 评测 lending_club：加特征后低保真比对照高 0.004~0.006，但不显著 → INCONCLUSIVE，连续 3 轮就 NO_PROGRESS，
+    agent 没机会把它升全量复验。低保真、不确定、但点估计更好的结果不计入停止计数；全量或变差的照旧计入。"""
+    b = OOTBudget({"oot_budget": {"alpha_0": .05, "max_compares": 9, "policy": "log"}}, str(tmp_path / "s.db"), "t")
+    kw = dict(cfg=CFG, oot_budget=b, round_no=4, max_rounds=10, remaining={"tokens": 1, "cpu_minutes": 1, "wall_minutes": 1}, best_score=0.8)
+    up = history_mark("INCONCLUSIVE", "low", 0.004)
+    assert stop_check(**kw, history_verdicts=["INCONCLUSIVE", "INCONCLUSIVE", up]) is None
+    assert stop_check(**kw, history_verdicts=["INCONCLUSIVE", "INCONCLUSIVE", history_mark("INCONCLUSIVE", "low", -0.001)]) == "NO_PROGRESS"
+    assert stop_check(**kw, history_verdicts=["INCONCLUSIVE", "INCONCLUSIVE", history_mark("INCONCLUSIVE", "full", 0.004)]) == "NO_PROGRESS"
+    assert history_mark("REJECT", "low", 0.004) == "REJECT"
+
+
+def test_too_many_features_counts_added_features_not_raw_width():
+    """v5 评测 home_credit：主表原始特征就有 122 个，固定上限 60 让包括赛跑在内的全部实验被拒，没有最终模型。
+    护栏防的是特征工程失控：有原始特征数时按『新增了多少』算，没有时退回总数上限。"""
+    cfg = {**CFG, "evaluator": {**CFG["evaluator"], "max_features": 60, "max_added_features": 40}}
+    assert "TOO_MANY_FEATURES" not in diagnose(M, cfg, n_features=122, n_raw_features=122)["details"]
+    assert "TOO_MANY_FEATURES" not in diagnose(M, cfg, n_features=162, n_raw_features=122)["details"]
+    assert diagnose(M, cfg, n_features=163, n_raw_features=122)["details"]["TOO_MANY_FEATURES"] == {"n_features": 163, "n_added": 41}
+    assert "TOO_MANY_FEATURES" in diagnose(M, cfg, n_features=61)["details"]
 
 
 @pytest.fixture
@@ -151,3 +183,59 @@ def test_guard_within_tolerance_keeps_verdict(ev):
     e.cfg["metric"] = {"primary": "auc", "guards": {"ks": 0.02}}
     out = e.evaluate(mk("good", oot_dev_ks=.39), mk("base", oot_dev_ks=.40))
     assert out["verdict"] == "ACCEPT"
+
+
+def _rec(i, action, fidelity, verdict, codes=(), model="lgbm", diff=None):
+    from memory.schema import Cost, ExperimentRecord
+    return ExperimentRecord(exp_id=i, task_id="t", parent_exp_id=None, hypothesis="h", action_type=action, diff=diff or {},
+                            config={"model": model}, config_hash=i, fidelity=fidelity, metrics={"oot_dev_auc": .8, "gap": .04},
+                            diagnosis_codes=list(codes), cost=Cost(), verdict=verdict)
+
+
+def test_after_promote_rejected_for_overfit_prior_is_regularize_not_promote_next():
+    """v0 评测 hotel s0：全量复验被 OVERFIT_GAP 拒后，NO_FINAL_MODEL 仍把"升下一个候选"放进先验，LLM 连升三个 gap 一样大的候选全被拒。
+    剩余轮数够时，先验只留收紧复杂度的方向；只剩最后一轮还没有最终模型时，照常要求升一个。"""
+    from evaluation.guardrails import POLICY_PRIOR, decision_codes
+    recs = [_rec("race_lgbm", "RACE", "low", "PROMISING"), _rec("race_rf", "RACE", "low", "PROMISING", model="random_forest"),
+            _rec("e01", "PROMOTE_FIDELITY", "full", "REJECT", ["OVERFIT_GAP"], diff={"exp_id": "race_lgbm"})]
+    p = {"best_exp_id": None, "last_codes": ["OVERFIT_GAP"]}
+    codes = decision_codes(p, recs, rounds_left=3)
+    prior = {x for c in codes for x in POLICY_PRIOR[c]}
+    assert "NO_FINAL_MODEL" not in codes and "PROMOTE_FIDELITY" not in prior and "TUNE" in prior
+    assert "NO_FINAL_MODEL" in decision_codes(p, recs, rounds_left=1)
+    other = recs[:2] + [_rec("e01", "TUNE", "low", "REJECT", ["OVERFIT_GAP"])]          # 低保真调参被拒：不受影响
+    assert "NO_FINAL_MODEL" in decision_codes(p, other, rounds_left=3)
+
+
+def test_overfit_gap_is_judged_against_the_reference_drift():
+    """hotel 的 valid 与 OOT-dev 季节不同：默认 LightGBM 自己的 gap 就有 0.07（v1 评测），固定 0.03 会拒掉所有有用的模型。
+    改成相对判定：超过 参照 gap + 容差 才算过拟合；没有参照时退回固定阈值。"""
+    from evaluation.guardrails import diagnose
+    cfg = {**CFG, "evaluator": {**CFG["evaluator"], "overfit_gap": {"mode": "relative", "tolerance": 0.05}}}
+    m = {"valid_auc": 0.89, "oot_dev_auc": 0.82}
+    assert "OVERFIT_GAP" not in diagnose(m, cfg, n_features=1, reference_gap=0.07)["codes"]
+    d = diagnose({"valid_auc": 0.95, "oot_dev_auc": 0.82}, cfg, n_features=1, reference_gap=0.07)
+    assert "OVERFIT_GAP" in d["codes"] and d["details"]["OVERFIT_GAP"]["reference_gap"] == 0.07
+    assert d["details"]["OVERFIT_GAP"]["excess"] == pytest.approx(0.06)
+    assert "OVERFIT_GAP" in diagnose(m, cfg, n_features=1)["codes"]                  # 没有参照：固定阈值 0.03
+
+
+def test_cost_estimate_is_model_aware():
+    """v1 评测 hotel_bookings：catboost 全量复验一次 18～21 分钟，估算按 lgbm 的系数低估了约 80 倍，预算检查形同虚设。"""
+    from tools.run_experiment import estimate_cost_minutes
+    cfg = load_config()
+    lg = estimate_cost_minutes(21000, 27, 20, cfg, "lgbm")
+    cb = estimate_cost_minutes(21000, 27, 20, cfg, "catboost")
+    assert cb == pytest.approx(lg * cfg["inner_loop"]["cost_model_factor"]["catboost"]) and cb > 60    # 约 77 CPU 分钟
+    assert 5 < lg < 20                                                                                 # 实测 lgbm 全量约 1.2 分钟 × 8 线程
+
+
+def test_cost_estimate_is_calibrated_on_this_tasks_race():
+    """v6 评测 home_credit（122 个特征）：静态公式在 lending_club/hotel（~35 个特征）上校准，这里高估 37–44 倍，
+    catboost 升全量估 1186 分钟 > 预算，决策连拒 4 次失败。有本任务同一模型的实测（赛跑）时按它的行数/特征数/trial 数比例外推。"""
+    from tools.run_experiment import estimate_cost_minutes
+    cfg = load_config()
+    obs = {"cpu_minutes": 4.0, "n_rows": 21600, "n_features": 122, "n_trials": 10}
+    assert estimate_cost_minutes(72000, 122, 20, cfg, "catboost", obs=obs) == pytest.approx(4.0 * 72000 / 21600 * 2)
+    assert estimate_cost_minutes(21600, 142, 10, cfg, "catboost", obs=obs) == pytest.approx(4.0 * 142 / 122)
+    assert estimate_cost_minutes(72000, 122, 20, cfg, "catboost") > 1000              # 没有实测时仍用静态公式

@@ -50,6 +50,8 @@ def scan_features(df, features, kh, cfg, dataset: str | None = None, extra_known
 class Evaluator:
     def __init__(self, cfg: dict, dataset: str, task_id: str, db_path: str | None = None):
         self.cfg = cfg
+        self.reference_gap = None              # 由 Orchestrator 在 PROFILE 测出后设置（evaluation/reference.py）
+        self.n_raw_features = None             # 原始特征数，由 Orchestrator 设置；TOO_MANY_FEATURES 按新增数算
         art = cfg["paths"]["artifacts_root"]
         self.art = art
         self.budget = OOTBudget(cfg, db_path or f"{art}/state.db", task_id)
@@ -72,7 +74,7 @@ class Evaluator:
                         leak_pattern_hits=[f for f in scan.get("leak_pattern_hits", []) if f not in handled_leaks],
                         history_verdicts=history_verdicts, remaining_budget_frac=remaining_budget_frac,
                         best_iter=cand.get("best_iter"), n_rounds_max=self.cfg["inner_loop"]["n_rounds_max"],
-                        model=cand["model"])
+                        model=cand["model"], reference_gap=self.reference_gap, n_raw_features=self.n_raw_features)
         codes = diag["codes"]
         fails = []
         if self.cfg.get("ablation", {}).get("no_guardrail"):     # A3：去掉 guardrail，只留 compare

@@ -83,13 +83,33 @@ def test_llm_verdict_ignored_and_taboo(toy_cfg):
 
 
 def test_spec_incomplete_asks_human_never_guesses(toy_cfg):
-    llm = ScriptedLLM([])
-    spec = toy_spec(toy_cfg).model_copy(update={"label_def": None, "oot_windows": None})
+    """缺必答项：LLM 起草推荐答案（校验不过就回灌重写），但不经人确认绝不写进 spec。
+    人回"确认"→ 采纳推荐值；回别的话 → LLM 把原话解析成取值，再请人确认一次（与 intake 同一套约定）。"""
+    prop = lambda k, q, rec, v: {"proposals": {k: {"question": q, "recommended": rec, "reason": "r", "value": v}}}
+    script = [{"proposals": {"label_def": {"question": "q1", "recommended": "玩具标签", "reason": "r", "value": {"definition": "玩具标签"}},
+                             "observation_time_col": {"question": "q2", "recommended": "用 zz 列", "reason": "r", "value": {"col": "zz"}}}},
+              prop("observation_time_col", "q2", "用 x1 列", {"col": "x1"}),          # zz 不存在 → 回灌后改正
+              prop("observation_time_col", "q2", "用 opened 列（开户月份）", {"col": "opened"})]   # 解析人的原话
+    llm = ScriptedLLM(script)
+    spec = toy_spec(toy_cfg).model_copy(update={"label_def": None, "observation_time_col": None})
     o = Orchestrator(spec, toy_cfg, llm, FinalGate("toy", toy_cfg, "t1"), "t1")
     assert o.run() == State.AWAIT_HUMAN
-    assert set(o.p["await"]["missing"]) == {"label_def", "oot_windows"} and llm.calls == []   # 没有调用 LLM 去脑补
-    o.resume_with({"spec": {"label_def": "toy", "oot_windows": {"oot_dev": ["2013-01", "2013-06"]}}})
-    assert o.state == State.INTAKE
+    qs = {q["key"]: q for q in o.p["await"]["questions"]}
+    assert set(qs) == {"label_def", "observation_time_col"} and qs["observation_time_col"]["recommended"] == "用 x1 列"
+    assert "zz" in llm.calls[1]                                                         # 校验错误回灌给了 LLM
+    assert o.spec.label_def is None and o.spec.observation_time_col is None             # 推荐不等于采纳
+
+    o.resume_with({"answers": {"label_def": "确认", "observation_time_col": "不对，用 opened，它是开户月份"}})
+    assert o.spec.label_def == "玩具标签" and o.spec.observation_time_col is None
+    assert "opened" in llm.calls[2] and o.run() == State.AWAIT_HUMAN                     # 改过的值要再确认一次
+    assert [q["key"] for q in o.p["await"]["questions"]] == ["observation_time_col"]
+    assert o.p["await"]["questions"][0]["recommended"] == "用 opened 列（开户月份）"
+
+    o.resume_with({"answers": {"observation_time_col": "用 opened 列（开户月份）"}})      # 原样提交推荐值也算确认
+    assert o.spec.observation_time_col == "opened" and o.spec.missing_required() == []
+    o.step()
+    assert o.state == State.PROFILE and len(llm.calls) == 3
+    assert [e["payload"]["key"] for e in o.events.query("spec_confirmed")] == ["label_def", "observation_time_col"]
 
 
 def leaky_env(tmp_path):
@@ -207,7 +227,7 @@ def test_context_exposes_tunable_params(toy_cfg):
         if ctx.get("mode") == "DECIDE":
             seen.setdefault("ctx", ctx)
             return dict(action="STOP", params={"reason": "x"}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
-        return {"directions": []}
+        return {"directions": [], "candidate_models": [{"model": "lgbm", "reason": "r"}]} if ctx.get("mode") == "PLAN" else {"directions": []}   # 只赛跑 lgbm：断言针对它的参数，不依赖谁赢赛跑
     o = build(toy_cfg, ScriptedLLM(script))
     o.run()
     t = seen["ctx"]["tunable"]
@@ -224,7 +244,7 @@ def test_no_final_model_nudges_promotion(toy_cfg):
 
     def script(user):
         if '"mode": "DECIDE"' not in user:
-            return {"directions": []} if '"mode": "PLAN"' in user else {"lessons": []}
+            return {"directions": [], "candidate_models": [{"model": "lgbm", "reason": "r"}]} if '"mode": "PLAN"' in user else {"lessons": []}
         ctx = json.loads(user.split("```json")[1].split("```")[0])
         ctxs.append(ctx)
         if len(ctxs) == 1:
@@ -328,3 +348,129 @@ def test_metric_locked_from_checkpoint_on_resume(toy_cfg):
     o.run(max_steps=1)                                                       # 写入检查点，口径为默认 auc
     Orchestrator(toy_spec(toy_cfg, autonomy="L0", metric=MetricSpec(primary="ks")), toy_cfg, PolicyMockLLM(), None, "lk")
     assert toy_cfg["metric"]["primary"] == "auc"
+
+
+def test_run_seed_reaches_every_experiment(toy_cfg):
+    """评测按种子重复运行：Optuna 采样和 LightGBM 的随机性都由 cfg.run.seed 决定。"""
+    toy_cfg["run"]["seed"], toy_cfg["run"]["max_rounds"] = 7, 2
+    o = build(toy_cfg, PolicyMockLLM())
+    o.run()
+    seeds = {json.loads(p.read_text())["config"]["seed"]
+             for p in (Path(toy_cfg["paths"]["artifacts_root"]) / "experiments").glob("*/result.json")}
+    assert seeds == {7}
+
+
+def test_reference_gap_is_measured_once_and_used(toy_cfg):
+    toy_cfg["run"]["max_rounds"] = 1
+    toy_cfg["evaluator"]["overfit_gap"] = {"mode": "relative", "tolerance": 0.05}
+    o = build(toy_cfg, PolicyMockLLM())
+    o.run()
+    ref = [e["payload"] for e in o.events.query() if e["type"] == "reference_gap"]
+    assert len(ref) == 1 and set(ref[0]) >= {"valid", "oot_dev", "gap"}
+    assert o.p["reference_gap"] == ref[0]["gap"] and o.evaluator.reference_gap == ref[0]["gap"]
+
+
+def _promote_then(after, toy_cfg, task):
+    """第一次 DECIDE 把 lgbm 赛跑实验升全量（toy 上会被 ACCEPT），之后的 DECIDE 交给 after(ctx)。"""
+    promote = lambda o: dict(action="PROMOTE_FIDELITY", params={"exp_id": o}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
+    state = {"n": 0}
+
+    def script(u):
+        ctx = json.loads(u.split("```json")[-1].split("```")[0])
+        if ctx.get("mode") == "PLAN":
+            return {"directions": []}
+        if ctx.get("mode") != "DECIDE":
+            return {"lessons": []}
+        state["n"] += 1
+        if state["n"] == 1:
+            return promote(next(r["exp_id"] for r in ctx["race"] if r["model"] == "lgbm"))
+        return after(ctx)
+    return build(toy_cfg, ScriptedLLM(script), task=task, autonomy="L0")
+
+
+def test_decide_failure_after_final_model_finishes_with_it(toy_cfg):
+    """v2 评测 lending_club s2：random_forest 已 ACCEPT，之后 DECIDE 连续被拒，L0 下整次运行 FAILED，成绩丢失。
+    已有最终模型时，决策失败应带着原因正常收尾（最终检验、报告）。"""
+    o = _promote_then(lambda ctx: "garbage", toy_cfg, "t5")
+    assert o.run() == State.DONE
+    assert o.p["stop_reason"] == "DECIDE_FAILED" and o.p["final"] is not None and o.p["best_exp_id"]
+
+
+def test_taboo_feedback_names_the_experiment_it_repeats(toy_cfg):
+    """被禁忌表拦下时告诉 LLM 撞的是哪个实验（v2 lending_club s2：LLM 不知道 SWITCH_MODEL catboost 低保真 = 赛跑里的 catboost，连撞三次）。"""
+    tune = dict(action="TUNE", params={"space": {"learning_rate": {"low": 0.02, "high": 0.1, "log": True}}, "n_trials": 7},
+                hypothesis="h", expected_gain="g", est_cost={"cpu_minutes": 0.01}, rationale="r" * 30)
+    stop = dict(action="STOP", params={"reason": "x"}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
+    n = {"k": 0}
+
+    def after(ctx):
+        n["k"] += 1
+        return tune if n["k"] <= 2 else stop                               # 第 2 次与第 1 次完全相同
+    o = _promote_then(after, toy_cfg, "t6")
+    o.run()
+    first = next(r.exp_id for r in o.store.all("t6") if r.action_type == "TUNE")
+    errs = " ".join(" ".join(e["payload"]["errors"]) for e in o.events.query("decision_rejected"))
+    assert "禁忌表" in errs and first in errs
+
+
+def test_low_fidelity_candidate_is_compared_with_low_fidelity_counterpart(toy_cfg):
+    """v3 评测 lending_club：有了全量最终模型后，低保真的 TUNE / EXPAND 都拿去和全量最优比，结构上必输（全部 PLATEAU/GUARD_FAIL）。
+    低保真候选应与当前最优的低保真版本（被升全量的那个实验）比；全量候选仍与全量最优比。"""
+    tune = dict(action="TUNE", params={"space": {"learning_rate": {"low": 0.02, "high": 0.1, "log": True}}, "n_trials": 3, "fidelity": "low"},
+                hypothesis="h", expected_gain="g", est_cost={"cpu_minutes": 0.01}, rationale="r" * 30)
+    stop = dict(action="STOP", params={"reason": "x"}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
+    n = {"k": 0}
+
+    def after(ctx):
+        n["k"] += 1
+        return tune if n["k"] == 1 else stop
+    o = _promote_then(after, toy_cfg, "t7")
+    o.run()
+    recs = o.store.all("t7")
+    promote = next(r for r in recs if r.action_type == "PROMOTE_FIDELITY")
+    tuned = next(r for r in recs if r.action_type == "TUNE")
+    assert o.p["best_exp_id"] == promote.exp_id and tuned.fidelity == "low"
+    ev = next(e for e in o.events.query("evaluated") if e["exp_id"] == tuned.exp_id)
+    assert ev["payload"]["baseline"] == promote.diff["exp_id"]           # 赛跑里那个低保真 lgbm，而不是全量的 promote
+
+
+def test_expand_that_keeps_no_features_is_not_trained(toy_cfg, monkeypatch):
+    """v5 评测 home_credit：加特征后筛选一个都没留（kept=0），仍按原特征集训练了一轮，白费时间且判定没有意义。
+    不训练，记为 EXPAND_EMPTY，把被筛掉的原因回灌给下一轮决策；模板列表只给代码支持的。"""
+    import features.factory as F
+    import tools.generate_features as G
+    monkeypatch.setattr(F, "load_templates", lambda ds, cfg: {"t1": {"id": "t1"}, "t_multi": {"id": "t_multi", "via": "bureau"}})
+    monkeypatch.setattr(G, "generate_features", lambda tid, ds, cfg: {"feature_set_id": "fs0", "kept": [], "leak_suspect": {},
+                                                                      "dropped": {"f_a": "IV 太低", "f_b": "与已有特征重复"}})
+    expand = dict(action="EXPAND_FEATURES", params={"template_id": "t1"}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
+    stop = dict(action="STOP", params={"reason": "x"}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
+    seen = []
+
+    def after(ctx):
+        seen.append(ctx)
+        return expand if len(seen) == 1 else stop
+    o = _promote_then(after, toy_cfg, "t9")
+    o.run()
+    assert seen[0]["templates"] == ["t1"]
+    r = next(r for r in o.store.all("t9") if r.action_type == "EXPAND_FEATURES")
+    assert r.diagnosis_codes == ["EXPAND_EMPTY"] and r.fidelity == "none" and not (o.art / "experiments" / r.exp_id).exists()
+    assert "IV 太低" in json.dumps(seen[1], ensure_ascii=False)
+    assert seen[1]["templates_used_here"]["t1"]["exp_id"] == r.exp_id          # 当前节点上用过的模板写进上下文（v6 s1/s2 在两个用过的模板之间来回撞）
+
+
+def test_profile_reports_oot_power_and_warns_when_underpowered(toy_cfg):
+    """PROFILE 算出 OOT-dev 能分辨的最小提升（MDE），写进事件和决策上下文；超过目标值就警告（OOT-dev 太小，建议加数据）。"""
+    toy_cfg["evaluator"]["mde"] = {**toy_cfg["evaluator"]["mde"], "target": 0.0001}
+    seen = []
+
+    def script(u):
+        ctx = json.loads(u.split("```json")[-1].split("```")[0])
+        if ctx.get("mode") == "DECIDE":
+            seen.append(ctx)
+            return dict(action="STOP", params={"reason": "x"}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
+        return {"directions": []} if ctx.get("mode") == "PLAN" else {"lessons": []}
+    o = build(toy_cfg, ScriptedLLM(script))
+    o.run()
+    ev = o.events.query("oot_power")[0]["payload"]
+    assert 0 < ev["mde"] < 0.5 and ev["n_pos"] > 0 and ev["underpowered"] is True and "OOT-dev" in ev["warning"]
+    assert seen[0]["oot_power"]["mde"] == ev["mde"]

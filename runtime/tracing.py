@@ -38,7 +38,7 @@ class NoopTracer:
     def generation(self, stage, model, prompt, temperature):
         yield None
 
-    def end_generation(self, g, text=None, tokens=0, error=None):
+    def end_generation(self, g, text=None, tokens=0, error=None, usage=None):
         pass
 
     def finish(self, state, output=None, error=None):
@@ -115,7 +115,7 @@ class LangfuseTracer(NoopTracer):
                                            model=model, input=prompt, model_parameters={"temperature": temperature}))
         yield g
 
-    def end_generation(self, g, text=None, tokens=0, error=None):
+    def end_generation(self, g, text=None, tokens=0, error=None, usage=None):
         if g is None:
             return
 
@@ -123,7 +123,8 @@ class LangfuseTracer(NoopTracer):
             if error:
                 g.update(level="ERROR", status_message=error)
             else:
-                g.update(output=text, usage_details={"total": int(tokens or 0)})
+                g.update(output=text, usage_details={**({"input": usage["input_cache_hit"] + usage["input_cache_miss"],
+                                                          "output": usage["output"]} if usage else {}), "total": int(tokens or 0)})
             g.end()
         self._safe(_end)
 

@@ -15,6 +15,11 @@ def load_templates(dataset: str, cfg: dict) -> dict:
     return {t["id"]: t for t in yaml.safe_load(open(p))["templates"]}
 
 
+def supported(t: dict) -> bool:
+    """多级聚合 / 跨表关联模板还没实现，不给 LLM 选（v5 评测 home_credit：选了就 NotImplementedError）。"""
+    return not (t.get("via") or t.get("join_with"))
+
+
 def parse_agg(a: str) -> dict | None:
     """把模板里的聚合写法规整成 DuckDB 表达式。无法解析（散文描述）返回 None。"""
     expr, _, comment = a.partition("#")
@@ -57,7 +62,7 @@ def compute(template_id: str, dataset: str, cfg: dict, ids: pd.Series, dictionar
     from data.knowhow import load_knowhow
     dictionary = dictionary or load_knowhow(dataset, cfg)["dictionary"]
     t = load_templates(dataset, cfg)[template_id]
-    if t.get("via") or t.get("join_with"):
+    if not supported(t):
         raise NotImplementedError(f"{template_id}: 多级聚合/跨表关联模板尚未支持")
     extra = cfg["task_specs"][dataset].get("pit_extra_filters", {}).get(t["source"])
     ent, unit, tf = t["entity"], t.get("time_unit"), t.get("time_field")

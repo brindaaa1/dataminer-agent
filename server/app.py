@@ -20,7 +20,7 @@ os.chdir(ROOT)                                           # 与 app.py 一致：c
 
 from runtime.env import load_env  # noqa: E402
 from runtime.events import EventLog  # noqa: E402
-from server import examples, intake_runner, runner, sources, tasks, view  # noqa: E402
+from server import eval_tasks, eval_view, examples, intake_runner, runner, sources, tasks, view  # noqa: E402
 
 load_env()
 app = FastAPI(title="DataMiner 工作台")
@@ -31,15 +31,19 @@ def _src(tid: str) -> dict:
         if tid[3:] not in examples.names():
             raise HTTPException(404, "任务不存在")
         return examples.load(tid[3:])
+    if tid.startswith("ev-"):
+        if not eval_tasks.exists(tid):
+            raise HTTPException(404, "任务不存在")
+        return eval_tasks.load(tid)
     if not tasks.exists(tid):
         raise HTTPException(404, "任务不存在")
     return sources.live(tid)
 
 
 def _need(tid: str, *statuses: str, idle: bool = True) -> dict:
-    """操作前检查状态：示例只读；状态不对或接入正在起草时返回 409。"""
-    if tid.startswith("ex-"):
-        raise HTTPException(409, "示例任务只读")
+    """操作前检查状态：示例和评测运行只读；状态不对或接入正在起草时返回 409。"""
+    if tid.startswith(("ex-", "ev-")):
+        raise HTTPException(409, "只读任务")
     if not tasks.exists(tid):
         raise HTTPException(404, "任务不存在")
     meta = runner.refresh(tasks.load(tid))
@@ -50,10 +54,10 @@ def _need(tid: str, *statuses: str, idle: bool = True) -> dict:
 
 @app.get("/api/tasks")
 def list_tasks():
-    live = [{"id": m["id"], "title": m["title"], "status": m["status"], "created_at": m["created_at"], "example": False}
+    live = [{"id": m["id"], "title": m["title"], "status": m["status"], "created_at": m["created_at"], "example": False, "eval": None}
             for m in tasks.list_tasks()]
-    return live + [{"id": f"ex-{n}", "title": f"示例 · {n}", "status": "done", "created_at": None, "example": True}
-                   for n in examples.names()]
+    return live + [{"id": f"ex-{n}", "title": f"示例 · {n}", "status": "done", "created_at": None, "example": True, "eval": None}
+                   for n in examples.names()] + eval_tasks.summaries()
 
 
 @app.post("/api/tasks", status_code=202)
@@ -170,6 +174,20 @@ async def stream(tid: str, request: Request, after: int = 0):
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
+@app.get("/api/tasks/{tid}/eval")
+def eval_tab(tid: str):
+    """本次运行的过程指标（任何任务都现算）；评测任务另有本版本对比和情景用例。"""
+    src = _src(tid)
+    ev = [e for e in src["events"] if not e["type"].startswith("intake.")]
+    if not tid.startswith("ev-"):
+        return {"process": eval_view.process_view(ev, src["records"], (src["meta"].get("settings") or {}).get("max_rounds")),
+                "version": None, "scenarios": None}
+    v, reg = eval_tasks.version_of(tid)
+    row = eval_tasks.index()[tid]["row"]
+    return {"process": eval_view.process_view(ev, src["records"], src["meta"]["settings"]["max_rounds"], row.get("cost_usd")),
+            "version": eval_view.version_view(v, reg), "scenarios": eval_view.scenarios_view(v)}
+
+
 @app.get("/api/tasks/{tid}/artifacts/{name}")
 def artifact(tid: str, name: str):
     files = _src(tid)["files"]
@@ -181,7 +199,7 @@ def artifact(tid: str, name: str):
 @app.get("/api/tasks/{tid}/bundle.zip")
 def bundle(tid: str):
     src = _src(tid)
-    if not (src["meta"].get("example") or src["meta"]["status"] == "accepted"):
+    if not (src["meta"].get("example") or src["meta"].get("eval") or src["meta"]["status"] == "accepted"):
         raise HTTPException(409, "确认报告后才能下载")
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:

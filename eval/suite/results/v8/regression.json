@@ -1,0 +1,131 @@
+{
+ "new": "v8",
+ "old": "v7b",
+ "tier": "fast",
+ "noise_calibrated": true,
+ "table": [
+  {
+   "dataset": "hotel_bookings",
+   "metric": "holdout",
+   "delta": -0.0024,
+   "new": 0.7911,
+   "old": 0.7935,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_hotel_bookings_s0"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "delta_b1",
+   "delta": -0.0033,
+   "new": 0.0072,
+   "old": 0.0105,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_hotel_bookings_s0"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "wasted_rate",
+   "delta": 0.0625,
+   "new": 0.0625,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_hotel_bookings_s0"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "rejected_decisions",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_hotel_bookings_s0"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "upgrade_hit_rate",
+   "delta": 0.0,
+   "new": 1.0,
+   "old": 1.0,
+   "n": 1,
+   "verdict": "same",
+   "worst_task": "v8_hotel_bookings_s0"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "fe_in_final",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_hotel_bookings_s0"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "holdout",
+   "delta": -0.0017,
+   "new": 0.6604,
+   "old": 0.6621,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_lending_club_s0"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "delta_b1",
+   "delta": -0.0038,
+   "new": -0.0004,
+   "old": 0.0035,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_lending_club_s0"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "wasted_rate",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_lending_club_s0"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "rejected_decisions",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_lending_club_s0"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "fe_in_final",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v8_lending_club_s0"
+  }
+ ],
+ "flags": [
+  {
+   "kind": "cost_up",
+   "dataset": "lending_club",
+   "detail": "wall_sec 308.2 → 754.1（阈值 ×1.33）"
+  },
+  {
+   "kind": "cost_up",
+   "dataset": "lending_club",
+   "detail": "cost_usd 0.01136 → 0.02358（阈值 ×1.34）"
+  }
+ ],
+ "conclusion": "有退步需看（2 项）"
+}

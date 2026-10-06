@@ -1,0 +1,33 @@
+{
+ "hotel_sample": {
+  "b0": {
+   "name": "b0_v0_hotel_sample",
+   "oot_dev_auc": 0.8256892984448617,
+   "oot_dev_ks": 0.4848084469982346,
+   "holdout_auc": 0.7619190998251578,
+   "wall_sec": 0.6168630123138428,
+   "n_features": 27,
+   "best_iter": 17
+  },
+  "b1": {
+   "name": "b1_v0_hotel_sample",
+   "oot_dev_auc": 0.837186976419921,
+   "oot_dev_ks": 0.5224190664672612,
+   "holdout_auc": 0.7772177948868028,
+   "wall_sec": 170.07064604759216,
+   "n_features": 27,
+   "best_estimator": "lgbm",
+   "time_budget": 170.1,
+   "best_config": {
+    "n_estimators": 15,
+    "num_leaves": 40,
+    "min_child_samples": 5,
+    "learning_rate": 0.14983108077994065,
+    "log_max_bin": 9,
+    "colsample_bytree": 0.6805631740592266,
+    "reg_alpha": 0.013155674219964855,
+    "reg_lambda": 0.00489953325363139
+   }
+  }
+ }
+}

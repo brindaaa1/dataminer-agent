@@ -65,3 +65,69 @@ def test_make_llm_reads_dotenv(tmp_path, monkeypatch):
     llm = make_llm("kimi", load_config())                              # 不联网：只是构造客户端
     assert llm.model.startswith("kimi")
     monkeypatch.delenv("MOONSHOT_API_KEY", raising=False)
+
+
+class UsageClient(FakeClient):
+    def __init__(self, text, usage):
+        super().__init__(text)
+        self.usage = usage
+
+    def _create(self, **kw):
+        self.calls.append(kw)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=self.text))], usage=self.usage)
+
+
+def test_usage_breakdown_from_deepseek_fields():
+    u = SimpleNamespace(total_tokens=150, prompt_tokens=100, completion_tokens=50, prompt_cache_hit_tokens=80,
+                        prompt_cache_miss_tokens=20, completion_tokens_details=SimpleNamespace(reasoning_tokens=30))
+    llm = OpenAICompatLLM("deepseek-flash", "http://x", "K", 100, client=UsageClient("ok", u))
+    assert llm.complete("s", "u")[1] == 150
+    assert llm.last_usage == {"input_cache_hit": 80, "input_cache_miss": 20, "output": 50, "reasoning": 30}
+
+
+def test_usage_without_cache_fields():
+    """Kimi 等不返回缓存字段：输入全部按未命中计，推理记 0。"""
+    u = SimpleNamespace(total_tokens=42, prompt_tokens=30, completion_tokens=12, completion_tokens_details=None)
+    llm = OpenAICompatLLM("kimi-x", "http://x", "K", 100, client=UsageClient("ok", u))
+    llm.complete("s", "u")
+    assert llm.last_usage == {"input_cache_hit": 0, "input_cache_miss": 30, "output": 12, "reasoning": 0}
+
+
+def test_thinking_off_is_sent_and_on_is_default():
+    off = UsageClient("ok", SimpleNamespace(total_tokens=1, prompt_tokens=1, completion_tokens=0, completion_tokens_details=None))
+    OpenAICompatLLM("deepseek-flash", "http://x", "K", 100, client=off, thinking=False).complete("s", "u")
+    assert off.calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+    on = UsageClient("ok", off.usage)
+    OpenAICompatLLM("deepseek-flash", "http://x", "K", 100, client=on).complete("s", "u")
+    assert "extra_body" not in on.calls[0]
+
+
+def test_traced_llm_writes_usage_into_event():
+    from agent.llm import TracedLLM
+    u = SimpleNamespace(total_tokens=150, prompt_tokens=100, completion_tokens=50, prompt_cache_hit_tokens=80,
+                        prompt_cache_miss_tokens=20, completion_tokens_details=SimpleNamespace(reasoning_tokens=30))
+    events = []
+    t = TracedLLM(OpenAICompatLLM("deepseek-flash", "http://x", "K", 100, client=UsageClient("ok", u)),
+                  lambda type_, p: events.append(p), lambda: "DECIDE")
+    t.complete("s", "u")
+    assert events[0]["usage"] == {"input_cache_hit": 80, "input_cache_miss": 20, "output": 50, "reasoning": 30}
+
+
+def test_deepseek_provider_config():
+    cfg = load_config()
+    p = cfg["llm"]["providers"]["deepseek"]
+    assert p["model"] == "deepseek-flash" and p["max_tokens"] == 16000 and p["thinking"] is True
+    assert cfg["llm"]["prices"]["deepseek-flash"] == {"input_cache_miss": 0.14, "input_cache_hit": 0.0028, "output": 0.28}
+
+
+def test_openai_client_retries_more_on_flaky_network(monkeypatch):
+    """v2 评测 hotel_bookings s2：第一次调用就断网，SDK 默认重试 2 次后整次运行作废。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    cfg = load_config()
+    llm = make_llm("deepseek", cfg)
+    assert llm.client.max_retries == cfg["llm"]["max_retries"] >= 5
+
+
+def test_deepseek_max_tokens_leaves_room_for_thinking():
+    """v2 评测 lending_club s2：推理用满 8000 个 token，回复为空。"""
+    assert load_config()["llm"]["providers"]["deepseek"]["max_tokens"] >= 16000

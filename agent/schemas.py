@@ -73,6 +73,7 @@ class TaskSpec(BaseModel):
     label_def: str | None = None
     label_col: str | None = None
     observation_time_col: str | None = None
+    observation_time_relative: dict | None = None   # 没有绝对时间时：{relative_to: 锚点事件, offset_cols: [通配]}（如 Home Credit 的 DAYS_*）
     oot_windows: dict | None = None
     metric: MetricSpec = Field(default_factory=MetricSpec)
     target_value: float | None = None
@@ -95,4 +96,6 @@ class TaskSpec(BaseModel):
 
     def missing_required(self) -> list[str]:
         """§4.4：这三个字段推断不出来且猜错代价高，禁止 LLM 假设，缺了就必须问人。"""
-        return [f for f in ("label_def", "observation_time_col", "oot_windows") if not getattr(self, f)]
+        have = {"label_def": self.label_def, "observation_time_col": self.observation_time_col or self.observation_time_relative,
+                "oot_windows": self.oot_windows}
+        return [f for f, v in have.items() if not v]

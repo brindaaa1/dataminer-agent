@@ -14,6 +14,8 @@ def main(inp, outp, code_path, id_col):
     if compute is None:
         raise SystemExit("代码必须定义 def compute(df)")
     out = compute(df)
+    if not out.index.equals(df.index):
+        raise SystemExit("compute(df) 的输出行必须与输入一一对应：保持 df 的索引和行顺序（不要排序、过滤或重置索引）")
     if isinstance(out, pd.Series):
         out = out.to_frame(out.name or "feat0")
     out = out.reset_index(drop=True)

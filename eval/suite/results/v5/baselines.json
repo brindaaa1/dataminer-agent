@@ -1,0 +1,28 @@
+{
+ "home_credit": {
+  "b0": {
+   "name": "b0_v5_home_credit",
+   "oot_dev_auc": 0.7074419134464638,
+   "oot_dev_ks": 0.3178236015311889,
+   "holdout_auc": 0.7390220119251243,
+   "wall_sec": 0.23862123489379883,
+   "n_features": 122,
+   "best_iter": 28
+  },
+  "b1": {
+   "name": "b1_v5_home_credit",
+   "oot_dev_auc": 0.7200979025590758,
+   "oot_dev_ks": 0.3556476826829978,
+   "holdout_auc": 0.7472591663069947,
+   "wall_sec": 30.118826150894165,
+   "n_features": 122,
+   "best_estimator": "catboost",
+   "time_budget": 30.0,
+   "best_config": {
+    "early_stopping_rounds": 15,
+    "learning_rate": 0.07442534159109113,
+    "n_estimators": 8192
+   }
+  }
+ }
+}

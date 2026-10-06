@@ -2,7 +2,8 @@ export type Status = "intake" | "intake_failed" | "config_ready" | "running" | "
 export type Stage = "intake" | "confirm" | "modeling" | "report"
 export type Tone = "ok" | "bad" | "warn" | "neutral" | "running"
 
-export interface TaskSummary { id: string; title: string; status: Status; created_at: number | null; example: boolean }
+export interface EvalInfo { label: string; tier: string; conclusion: string | null }
+export interface TaskSummary { id: string; title: string; status: Status; created_at: number | null; example: boolean; eval: EvalInfo | null }
 export interface Question { key: string; question: string; recommended: string; display: string; required: boolean }
 export interface FieldRow { name: string; type: string; availability: string; reason: string; group: "ok" | "leak" | "quarantine" | "meta" }
 export type Windows = Record<"train_valid" | "oot_dev" | "holdout", [string, string]>
@@ -27,11 +28,19 @@ export interface Run {
   narration: Narration[]; final: Final | null; tree: TreeNode[]
 }
 export interface Snapshot {
-  id: string; title: string; status: Status; stage: Stage; example: boolean; readonly: boolean; busy: boolean
+  id: string; title: string; status: Status; stage: Stage; example: boolean; eval_label: string | null; readonly: boolean; busy: boolean
   error: string | null; provider: string; langfuse_url: string | null; intake_langfuse_url: string | null; note: string | null
   data: { csv_name: string; description: string; n_rows: number | null; n_cols: number | null }
   intake: Intake | null; run: Run | null; artifacts: { name: string; label: string }[]; last_event_id: number
 }
+export interface Evidence { ref: string; round: string | null }
+export interface ProcessRow { key: string; label: string; value: number | boolean | string | null; detail: Record<string, unknown>; evidence: Evidence[] }
+export interface RegRow { dataset: string; metric: string; new: number; old: number; delta: number; n: number; verdict: "better" | "worse" | "same"; task: string | null }
+export interface Flag { kind: string; detail: string; task: string | null }
+export interface RunRow { task: string; dataset: string; seed: number; status: string; holdout: number | null; delta_b1: number | null }
+export interface VersionView { label: string; tier: string; against: string | null; conclusion: string; noise_calibrated: boolean; table: RegRow[]; flags: Flag[]; runs: RunRow[] }
+export interface ScenarioRow { scenario: string; base: string; passed: boolean; reason: string; task: string }
+export interface EvalView { process: ProcessRow[]; version: VersionView | null; scenarios: ScenarioRow[] | null }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface TaskEvent { id: number; ts: number; type: string; exp_id: string | null; payload: any }
 
@@ -63,5 +72,6 @@ export const api = {
   resume: (id: string) => post(`${t(id)}/resume`),
   accept: (id: string, note: string) => post(`${t(id)}/accept`, { note }),
   clone: (id: string) => post<{ id: string }>(`${t(id)}/clone`),
+  evalView: (id: string) => getJSON<EvalView>(`${t(id)}/eval`),
   artifact: async (id: string, name: string) => (await check(await fetch(`${t(id)}/artifacts/${name}`))).text(),
 }

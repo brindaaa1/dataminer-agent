@@ -53,3 +53,18 @@ def test_bad_narrative_is_dropped(tmp_path):
     rep = build_report(cfg, o.spec, o.store, o.p, o.p["final"], 3, liar)
     assert rep["narrative"] is None
     assert "0.9999" not in open(rep["model_card"]).read()
+
+
+def test_model_card_survives_explain_failure(tmp_path, monkeypatch):
+    """最终检验已出结果后，特征贡献算不出来只影响模型卡那一节，不能让整次运行失败、丢掉成绩。"""
+    import report.model_card as mc
+
+    def boom(*a, **k):
+        raise AttributeError("'XSpec' object has no attribute '_transform'")
+
+    cfg = make_toy(tmp_path)
+    monkeypatch.setattr(mc, "explain", boom)
+    o = Orchestrator(toy_spec(cfg), cfg, PolicyMockLLM(), FinalGate("toy", cfg, "t1"), "t1")
+    assert o.run().value == "DONE"
+    card = open(f"{cfg['paths']['reports_root']}/model_card_t1.md").read()
+    assert "## 6. 特征清单" in card and "特征贡献计算失败" in card and "## 8. 风险提示" in card

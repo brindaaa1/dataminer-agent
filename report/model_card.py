@@ -21,6 +21,10 @@ NARRATIVE_SYSTEM = ("你是报告撰写节点。根据给定的 facts（JSON）�
                     "只能使用 facts 中出现的数字，不要自己计算或推断新数字，不要评价方法优劣。只输出摘要文字。")
 
 
+def _relative(r):
+    return f"相对{r['relative_to']}（{'、'.join(r['offset_cols'])}）" if r else None
+
+
 def safe_narrative(text: str, facts: dict) -> str | None:
     """摘要里出现的每个数字都必须能在 facts 里找到（允许四舍五入），否则整段丢弃。"""
     nums = []
@@ -112,7 +116,7 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
     L += [f"# 模型卡：{task}", "", f"> 数据集 `{ds}`；本文档数据全部由代码生成。", ""]
     L += ["## 执行摘要", "", narrative or "（未生成摘要，或摘要中的数字无法在事实数据中核对，已丢弃。）", ""]
     s = spec
-    L += ["## 1. 任务规格", "", "| 项 | 值 |", "|---|---|", f"| label 定义 | {s.label_def} |", f"| 观察时间列 | {s.observation_time_col} |",
+    L += ["## 1. 任务规格", "", "| 项 | 值 |", "|---|---|", f"| label 定义 | {s.label_def} |", f"| 观察时间 | {s.observation_time_col or _relative(s.observation_time_relative)} |",
           f"| OOT 窗口 | {json.dumps(s.oot_windows, ensure_ascii=False)} |", f"| 目标指标 | {s.metric.primary}（护栏 {s.metric.guards}，目标值 {s.target_value}） |",
           f"| 约束 | {s.constraints.model_dump()} |", f"| 预算 | {s.budget.model_dump()} |", f"| 自治级别 | {s.autonomy} |", ""]
     L += ["## 2. 数据切分", "", "| 切分 | 样本数 | 坏样本率 |", "|---|---|---|"]
@@ -165,7 +169,11 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
             L.append("")
 
         # ---- 特征清单 ----
-        ex = explain(ds, cfg, best)
+        try:
+            ex, ex_err = explain(ds, cfg, best), None
+        except Exception as e:                  # 最终检验已出结果：这一节算不出来只在模型卡里注明，不能让整次运行失败
+            ex, ex_err = {}, f"{type(e).__name__}: {str(e)[:200]}"
+            risks.append(f"特征贡献计算失败（{ex_err}），特征清单与 SHAP 方向检查缺失。")
         meta, prior, incumbent = _feature_meta(ds, cfg, best["config"])
         trf = tr.copy()
         if best["config"].get("feature_sets"):
@@ -181,12 +189,14 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
             v_iv = iv(trf[f], trf["_label"]) if f in trf else float("nan")
             rows.append((f, mt["source"], mt["definition"][:70], v_iv, e["share"], flag))
         L += ["## 6. 特征清单（按平均 |SHAP| 排序）", "", "| 特征 | 来源 | 定义/说明 | IV | 贡献占比 | 备注 |", "|---|---|---|---|---|---|"]
+        if ex_err:
+            L.append(f"| 特征贡献计算失败：{ex_err} | | | | | |")
         for f, src, dfn, v_iv, sh, flag in rows[:40]:
             L.append(f"| {f} | {src} | {dfn} | {v_iv:.3f} | {sh:.1%} | {flag} |")
         if len(rows) > 40:
             L.append(f"| …其余 {len(rows) - 40} 个 | | | | {sum(r[4] for r in rows[40:]):.1%} | |")
-        top = rows[0]
-        if top[4] > 0.4:
+        top = rows[0] if rows else None
+        if top and top[4] > 0.4:
             risks.append(f"单个特征 `{top[0]}` 贡献占比 {top[4]:.0%} > 40%（sanity_rules）。")
         inc = [(f, sh) for f, _, _, _, sh, _ in rows if f in incumbent]
         if inc:

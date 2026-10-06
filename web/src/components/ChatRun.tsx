@@ -27,7 +27,7 @@ export function ChatRun({ snap }: { snap: Snapshot }) {
       {(snap.status === "stopped" || snap.status === "failed") && (
         <Bubble tone={snap.status === "failed" ? "bad" : "neutral"}>
           {snap.status === "stopped" ? "已中止。" : `运行失败：${snap.error ?? ""}`}
-          <div className="mt-2"><Button size="sm" onClick={() => resume.mutate()} disabled={resume.isPending}><Play className="size-3" />从检查点续跑</Button></div>
+          {!snap.readonly && <div className="mt-2"><Button size="sm" onClick={() => resume.mutate()} disabled={resume.isPending}><Play className="size-3" />从检查点续跑</Button></div>}
         </Bubble>
       )}
     </>

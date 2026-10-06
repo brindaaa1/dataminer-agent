@@ -1,0 +1,43 @@
+{
+ "calibrated": true,
+ "from": [
+  "v7b",
+  "v7a"
+ ],
+ "bands": {
+  "holdout": 0.0174,
+  "delta_b1": 0.0109,
+  "wasted_rate": 0.1,
+  "rejected_decisions": 1,
+  "upgrade_hit_rate": 0.2,
+  "fe_in_final": 0.5
+ },
+ "by_dataset": {
+  "hotel_bookings": {
+   "holdout": 0.0174,
+   "delta_b1": 0.0106,
+   "wasted_rate": 0.1,
+   "rejected_decisions": 1,
+   "upgrade_hit_rate": 0.2,
+   "fe_in_final": 0.5
+  },
+  "lending_club": {
+   "holdout": 0.0067,
+   "delta_b1": 0.0109,
+   "wasted_rate": 0.1,
+   "rejected_decisions": 1.0,
+   "upgrade_hit_rate": 0.2,
+   "fe_in_final": 0.5
+  }
+ },
+ "cost_ratio": {
+  "hotel_bookings": {
+   "wall_sec": 3.31,
+   "cost_usd": 1.33
+  },
+  "lending_club": {
+   "wall_sec": 1.33,
+   "cost_usd": 1.34
+  }
+ }
+}

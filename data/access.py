@@ -15,6 +15,17 @@ _ALLOWED_ISSUER = "evaluation.final_gate"
 TOOL_SPLITS = ("train", "valid", "oot_dev")
 
 
+def numpy_types(df: pd.DataFrame) -> dict[str, str]:
+    """pandas 可空类型（boolean、Int64 等）就地转成 float64，缺失变 NaN：pd.NA 让 CatBoost、IV 分箱等下游报错（v5 评测 home_credit）。
+    返回 {列名: 原类型}。写切分文件时调用一次（data/splits.py）；特征工程挂上来的列在 modeling/prep.py 里再调一次。"""
+    out = {}
+    for c in df.columns:
+        if isinstance(df[c].dtype, pd.api.extensions.ExtensionDtype) and (pd.api.types.is_bool_dtype(df[c]) or pd.api.types.is_numeric_dtype(df[c])):
+            out[c] = str(df[c].dtype)
+            df[c] = df[c].astype("float64")
+    return out
+
+
 class HoldoutAccessError(PermissionError):
     pass
 

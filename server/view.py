@@ -201,7 +201,8 @@ def snapshot(src: dict) -> dict:
     status, busy = meta["status"], meta.get("busy", False)
     prof = next((e["payload"] for e in intake_ev if e["type"] == "profile"), None) or (src["intake"] or {}).get("profile")
     return {"id": meta["id"], "title": meta["title"], "status": status, "stage": STAGE[status],
-            "example": meta.get("example", False), "readonly": meta.get("example", False) or status == "accepted",
+            "example": meta.get("example", False), "eval_label": meta.get("eval"),
+            "readonly": meta.get("example", False) or bool(meta.get("eval")) or status == "accepted",
             "busy": busy, "error": meta.get("error"), "provider": meta["provider"], "langfuse_url": meta.get("langfuse_url"),
             "intake_langfuse_url": meta.get("intake_langfuse_url"), "note": meta.get("note"),
             "data": {**src["data"], "n_rows": prof["n_rows"] if prof else None, "n_cols": len(prof["columns"]) if prof else None},

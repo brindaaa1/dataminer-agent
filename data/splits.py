@@ -7,6 +7,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from data.access import numpy_types
 from data.knowhow import column_policy, field_table, load_config, load_knowhow
 
 ID, LABEL, OBS, SPLIT_T = "_row_id", "_label", "_obs_time", "_split_time"
@@ -112,6 +113,7 @@ def build_splits(dataset: str, cfg: dict | None = None, table_path: str | None =
     ms = (tr[pol["keep"]].isna().mean() - oo[pol["keep"]].isna().mean()).abs()
     report["missing_rate_shift"] = ms[ms > cfg["thresholds"]["missing_shift_report"]].round(3).to_dict()
 
+    report["dtype_normalized"] = numpy_types(df)      # 写文件前统一成 numpy 类型：下游只见 float/object/category/datetime
     art = Path(cfg["paths"]["artifacts_root"])
     (art / "splits" / dataset).mkdir(parents=True, exist_ok=True)
     (art / "holdout" / dataset).mkdir(parents=True, exist_ok=True)

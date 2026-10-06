@@ -106,8 +106,9 @@ def test_expand_features_action_requires_template_xor_code():
     assert kind == "expand" and cfg == {"template_id": None, "code": GOOD_CODE} and parent == "e1"
 
 
-def test_expand_features_integrates_into_decide_loop_and_forces_escalation(toy_cfg):
-    """端到端：EXPAND_FEATURES(code=...) → run_code → 新特征进入下一轮训练 → 因 LEAK_SUSPECT 只能 ESCALATE_HUMAN。"""
+def test_expand_features_integrates_into_decide_loop(toy_cfg):
+    """端到端：EXPAND_FEATURES(code=...) → run_code（只看白名单输入）→ 新特征进入下一轮训练，不再一律 LEAK_SUSPECT 等人工批准。
+    （第 5 轮之前这里断言的是"只能 ESCALATE_HUMAN"；没有白名单的旧特征集和单特征 AUC 过高的特征仍会被标为可疑。）"""
     ok = lambda a, p: dict(action=a, params=p, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
 
     def script(u):
@@ -115,21 +116,15 @@ def test_expand_features_integrates_into_decide_loop_and_forces_escalation(toy_c
         ctx = json.loads(u.split("```json")[-1].split("```")[0])
         if ctx.get("mode") == "PLAN":
             return {"directions": []}
-        if not ctx["unhandled_leaks"] and ctx["round_no"] == 1:
-            return ok("EXPAND_FEATURES", {"code": GOOD_CODE})
-        if ctx["unhandled_leaks"]:
-            return ok("ESCALATE_HUMAN", {"reason": "run_code 产出待审", "options": ["approve"]})
-        return ok("STOP", {"reason": "x"})
-    llm = ScriptedLLM(script)
-    o = Orchestrator(toy_spec(toy_cfg), toy_cfg, llm, FinalGate("toy", toy_cfg, "t_expand"), "t_expand")
+        if ctx.get("mode") != "DECIDE":
+            return {"lessons": []}
+        return ok("EXPAND_FEATURES", {"code": GOOD_CODE}) if ctx["round_no"] == 1 else ok("STOP", {"reason": "x"})
+    o = Orchestrator(toy_spec(toy_cfg), toy_cfg, ScriptedLLM(script), FinalGate("toy", toy_cfg, "t_expand"), "t_expand")
     from agent.states import State
-    assert o.run() == State.AWAIT_HUMAN
-    rec = next(r for r in o.store.all("t_expand") if r.action_type == "EXPAND_FEATURES")
-    assert rec.diff["expand"]["feature_set_id"].startswith("fs_code_")
-    assert "code_feat" in o.p["pending_leaks"]
-    # 人工批准后：特征可以被真正使用，能够继续跑完
-    o.resume_with({"approve": ["code_feat"]})
     assert o.run() == State.DONE
+    rec = next(r for r in o.store.all("t_expand") if r.action_type == "EXPAND_FEATURES")
+    assert rec.diff["expand"]["feature_set_id"].startswith("fs_code_") and "code_feat" in rec.config["features"]
+    assert "code_feat" not in o.p["pending_leaks"] and "code_feat" not in o.p["quarantined"]
 
 
 def test_expand_features_failure_is_recorded_not_crashed(toy_cfg):
@@ -151,3 +146,61 @@ def test_expand_features_failure_is_recorded_not_crashed(toy_cfg):
 
 
 
+
+
+# ---- 第 5 轮：按输入判定可信度（G3）、失败原因回灌（G1）、规则写进上下文（G2）----
+
+def test_code_only_sees_the_inputs_it_is_given(toy_cfg):
+    """看不到标签、切分时间和不在白名单里的字段：特征在时间上自然可信。"""
+    ncol = "def compute(df):\n    return (df['x1'] + float(len(df.columns))).rename('ncol')\n"
+    r = run_code(ncol, "toy", toy_cfg, inputs=["x1"])
+    feat = pd.read_parquet(Registry(toy_cfg).cache_path(r["feature_set_id"], "train"))
+    from data.access import DataAccess
+    tr = DataAccess("toy", toy_cfg["paths"]["artifacts_root"]).load("train")
+    assert np.allclose(feat["ncol"] - tr["x1"].values, 3, equal_nan=True)   # 列数 = _row_id、_obs_time、x1
+    with pytest.raises(RunCodeError, match="_label"):
+        run_code("def compute(df):\n    return df['_label'].rename('y')\n", "toy", toy_cfg, inputs=["x1"])
+
+
+def test_holdout_recompute_uses_the_same_inputs(toy_cfg):
+    """final_gate 在 holdout 上现算 run_code 特征时，同样看不到标签。"""
+    code = "def compute(df):\n    return (df['x1'] + (1000.0 if '_label' in df.columns else 0.0)).rename('f')\n"
+    r = run_code(code, "toy", toy_cfg, inputs=["x1", "x2"])
+    h = FinalGate("toy", toy_cfg, "t_h").load_holdout()          # holdout 只能经 final_gate 读取
+    out = Registry(toy_cfg).attach(h, [r["feature_set_id"]], "holdout")
+    assert np.allclose(out["f"], out["x1"], equal_nan=True)
+
+
+def test_reordered_output_is_rejected(toy_cfg):
+    """compute 打乱行序会让特征与样本错位：必须报错（并把原因回给 LLM），不能静默错配。"""
+    code = "def compute(df):\n    return df.sort_values('x1')['x1'].rename('s')\n"
+    with pytest.raises(RunCodeError, match="一一对应"):
+        run_code(code, "toy", toy_cfg, inputs=["x1"])
+
+
+def test_run_code_features_usable_at_l0_and_failures_fed_back(toy_cfg):
+    """L0 下：run_code 特征按输入判定可信（不再一律 LEAK_SUSPECT 被隔离）；失败原因写进事件并出现在下一轮上下文；
+    上下文里有 run_code 的规则（上限、可用输入，不含标签与被隔离字段）。v2 lending_club：12 个特征超上限，LLM 不知原因。"""
+    import json
+    too_many = "def compute(df):\n    import pandas as pd\n    return pd.DataFrame({f'f{i}': df['x1'] * i for i in range(1, 13)})\n"
+    exp = lambda code: dict(action="EXPAND_FEATURES", params={"code": code}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
+    stop = dict(action="STOP", params={"reason": "x"}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r" * 30)
+    seen = []
+
+    def script(u):
+        ctx = json.loads(u.split("```json")[-1].split("```")[0])
+        if ctx.get("mode") == "PLAN":
+            return {"directions": []}
+        if ctx.get("mode") != "DECIDE":
+            return {"lessons": []}
+        seen.append(ctx)
+        return [exp(too_many), exp(GOOD_CODE), stop][min(len(seen) - 1, 2)]
+    o = Orchestrator(toy_spec(toy_cfg, autonomy="L0"), toy_cfg, ScriptedLLM(script), FinalGate("toy", toy_cfg, "t9"), "t9")
+    o.run()
+    rc = seen[0]["run_code"]
+    assert rc["max_features"] == toy_cfg["run_code"]["max_features"] and "x1" in rc["inputs"] and "_label" not in rc["inputs"]
+    assert "最多" in (seen[1].get("last_failure") or "")
+    assert any("最多" in (e["payload"].get("error") or "") for e in o.events.query("recorded"))
+    expanded = next(r for r in o.store.all("t9") if r.action_type == "EXPAND_FEATURES" and r.config)
+    assert "code_feat" in expanded.config["features"] and "code_feat" not in o.p["quarantined"]
+    assert "LEAK_SUSPECT" not in expanded.diagnosis_codes

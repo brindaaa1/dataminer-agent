@@ -49,7 +49,7 @@ class Registry:
                 feat = pd.read_parquet(p)
             elif meta["source"] == "run_code":            # holdout：final_gate 拿到 df 后现算（同一份沙箱代码，同一套子进程隔离）
                 from tools.run_code import apply_code_to_df
-                feat = apply_code_to_df(meta["code"], df, self.cfg)
+                feat = apply_code_to_df(meta["code"], df, self.cfg, (meta["defs"] or [{}])[0].get("inputs"))   # 与生成时同一份输入白名单
                 p.parent.mkdir(parents=True, exist_ok=True)
                 feat.to_parquet(p)
             else:

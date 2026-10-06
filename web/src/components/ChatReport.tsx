@@ -15,6 +15,7 @@ export function ChatReport({ snap }: { snap: Snapshot }) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["task", snap.id] }); qc.invalidateQueries({ queryKey: ["tasks"] }) },
   })
   if (snap.example) return <Bubble from="system">示例任务：录制的真实运行，只读。</Bubble>
+  if (snap.eval_label) return <Bubble from="system">评测运行（版本 {snap.eval_label}）：只读。结果和对比在右侧「评测」tab。</Bubble>
   if (snap.status === "accepted") return <Bubble from="system">报告已确认{snap.note ? `：${snap.note}` : ""}。产出可以在右侧打包下载。</Bubble>
   if (snap.status !== "done") return null
   return (

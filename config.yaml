@@ -65,7 +65,7 @@ thresholds:
   missing_shift_report: 0.20          # train 与 oot_dev 缺失率相差超过此值，写入报告
 
 fidelity:
-  low:  {sample_frac: 0.10, n_trials: 20,  early_stopping_rounds: 20}
+  low:  {sample_frac: 0.10, min_rows: 20000, n_trials: 20,  early_stopping_rounds: 20}   # 抽样后至少 2 万行（不足则全量）：小样本上分数随采样种子差 0.01
   full: {sample_frac: 1.0,  n_trials: 100, early_stopping_rounds: 50}
 
 inner_loop:
@@ -73,7 +73,8 @@ inner_loop:
   warm_start_max_frac: 0.10  # 初始点最多占 trial 总数的比例
   pruner_startup_trials: 5
   report_every: 50           # lgbm 每多少棵树向 pruner 汇报一次
-  cost_coef_sec: 1.0e-8      # 成本估算：秒 ≈ 系数 × 行数 × 特征数 × 树数×trial 数；随实测校准
+  cost_coef_sec: 4.5e-7      # 成本估算：CPU 秒 ≈ 系数 × 模型倍数 × 行数 × 特征数 × 树数×trial 数（2026-10 评测按 lgbm 实测校准）
+  cost_model_factor: {lgbm: 1.0, catboost: 9.0, random_forest: 1.5, lr_scorecard: 0.4}   # 相对 lgbm，同一次评测实测
   n_rounds_max: 500          # lgbm 每个 trial 的最大树数
 
 evaluator:
@@ -81,13 +82,16 @@ evaluator:
   psi_warn: 0.10
   psi_severe: 0.25
   psi_bins: 10
-  max_features: 60
+  max_features: 60            # TOO_MANY_FEATURES：不知道原始特征数时的总数上限
+  max_added_features: 40      # TOO_MANY_FEATURES：相对原始特征最多新增多少（防特征工程失控，不限制原始数据宽度）
   bootstrap_n: 1000
   bootstrap_seed: 0
+  mde: {target: 0.01, power: 0.8, auc_corr: 0.82}   # OOT-dev 能分辨的最小提升；auc_corr：同一 OOT 上两个候选 AUC 的相关（v5 实测 SE_Δ/SE 0.3–0.6，取 0.6 ↔ 0.82）
   no_progress_rounds: 3        # NO_PROGRESS：连续 N 轮 REJECT/INCONCLUSIVE
   budget_low_frac: 0.15
   plateau_ci_hint: true
   early_stop_min_frac: 0.05    # NO_CONVERGE：最佳迭代数 < n_rounds_max × 该比例（几乎没学到东西）
+  overfit_gap: {mode: relative, tolerance: 0.05}   # OVERFIT_GAP：gap 超过参照模型（默认 LightGBM）自己的 gap + 容差才拒；没有参照时用 metrics.py 的固定阈值
 
 oot_budget:
   alpha_0: 0.05
@@ -111,10 +115,13 @@ llm:
   providers:                  # --llm <名字> 选择；key 只从环境变量（或 .env）读取，不写进本文件
     anthropic: {type: anthropic, model: claude-sonnet-5, key_env: ANTHROPIC_API_KEY}
     kimi:      {type: openai_compat, model: kimi-k3, base_url: "https://api.moonshot.cn/v1", key_env: MOONSHOT_API_KEY, fixed_temperature: 1, max_tokens: 8000}
-    deepseek:  {type: openai_compat, model: deepseek-chat, base_url: "https://api.deepseek.com/v1", key_env: DEEPSEEK_API_KEY}
+    deepseek:  {type: openai_compat, model: deepseek-flash, base_url: "https://api.deepseek.com/v1", key_env: DEEPSEEK_API_KEY, max_tokens: 16000, thinking: true}
     # 不同账号能用的模型名不同；先用 client.models.list() 确认，再改这里。
+  prices:                     # 美元 / 百万 token，评测折算花费用；以服务商官网为准
+    deepseek-flash: {input_cache_miss: 0.14, input_cache_hit: 0.0028, output: 0.28}
   model: claude-sonnet-5      # 兼容旧字段
   max_tokens: 2000
+  max_retries: 6              # 断网/超时时 SDK 自动重试（指数退避）；默认 2 次在网络不稳时会让整次运行作废
   decide_temperature: 0.0
 
 screen:                        # 筛选漏斗，顺序：缺失率 → IV → 单特征 AUC 报警 → 相关性去重 → PSI

@@ -1,0 +1,12 @@
+# 目标方向先验：+1 = 值越大越可能是正类；-1 = 越小越可能；0 = 无先验（不加单调约束）。
+# 单调约束和模型卡读这里；模板产出的特征方向继承模板 / 领域手册里的 direction。没列出的特征不加约束。
+# 新特征的方向可以由 LLM 提议，但要写出业务理由，并经过「加约束 vs 不加约束」的比较才保留。
+target_direction:
+  EXT_SOURCE_1: -1
+  EXT_SOURCE_2: -1
+  EXT_SOURCE_3: -1
+  AMT_INCOME_TOTAL: -1
+  credit_income_ratio: +1
+  annuity_income_ratio: +1
+  # 模板产出的特征：方向继承 templates/*.yaml 中的 monotone_prior；
+  # 单个 agg 上标注了自己的 monotone_prior 时以 agg 为准。

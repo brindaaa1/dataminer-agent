@@ -7,12 +7,10 @@ scikit-learn>=1.4
 pydantic>=2.6
 pyyaml>=6.0
 scipy>=1.11
-matplotlib>=3.8
 anthropic>=0.40
 openai>=1.40        # OpenAI 兼容接口（Kimi、DeepSeek 等）
 flaml[automl]>=2.0    # 仅用于 baseline B1；AutoML 在 automl extra 里
 pytest>=7.4
-streamlit>=1.37,<1.38  # app.py 演示页（AppTest 测试也依赖它）；只在 1.37 上测过，新版部分参数已废弃
 optuna-dashboard      # 可选：进度可视化
 langfuse>=4           # 可选：.env 里配了 LANGFUSE_* 时上报 trace；不装也能正常运行
 fastapi>=0.115        # 工作台后端（server/）

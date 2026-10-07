@@ -39,8 +39,8 @@ def copy_knowhow(base: str, cfg: dict, out: Path) -> Path:
     src, dst = Path(cfg["paths"]["knowhow_root"]), Path(out) / "knowhow"
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(src / base, dst / base)
-    if (src / "domain_priors.yaml").exists():          # 单调约束方向、模型卡先验都读它
-        shutil.copy(src / "domain_priors.yaml", dst / "domain_priors.yaml")
+    if (src / "domains").exists():                     # 领域手册：接入、规划、模型卡都读（数据集的 priors.yaml 随上面的目录复制）
+        shutil.copytree(src / "domains", dst / "domains")
     t = src / "templates" / f"{base}.yaml"
     if t.exists():
         (dst / "templates").mkdir(parents=True, exist_ok=True)

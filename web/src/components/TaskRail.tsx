@@ -6,6 +6,7 @@ import { ErrorText } from "@/components/ErrorText"
 import { Button } from "@/components/ui/button"
 import { CLONEABLE, DOT } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { useDev } from "@/useDev"
 
 function Item({ t, current, open, onSelect, onClone }: { t: TaskSummary; current: string | null; open: boolean;
   onSelect: (id: string) => void; onClone?: () => void }) {
@@ -24,6 +25,7 @@ function Item({ t, current, open, onSelect, onClone }: { t: TaskSummary; current
 
 export function TaskRail({ tasks, current, onSelect }: { tasks: TaskSummary[]; current: string | null; onSelect: (id: string | null) => void }) {
   const [open, setOpen] = useState(false)
+  const dev = useDev()
   const qc = useQueryClient()
   const clone = useMutation({
     mutationFn: api.clone,
@@ -31,7 +33,7 @@ export function TaskRail({ tasks, current, onSelect }: { tasks: TaskSummary[]; c
   })
   const plain = tasks.filter((t) => !t.eval)
   const versions = new Map<string, TaskSummary[]>()
-  for (const t of tasks) if (t.eval) versions.set(t.eval.label, [...(versions.get(t.eval.label) ?? []), t])
+  for (const t of tasks) if (t.eval && dev) versions.set(t.eval.label, [...(versions.get(t.eval.label) ?? []), t])
   return (
     <nav className={cn("flex shrink-0 flex-col border-r bg-muted/40 transition-[width]", open ? "w-64" : "w-12")}>
       <Button variant="ghost" size="icon" className="m-1" aria-label="任务列表" onClick={() => setOpen(!open)}><Menu className="size-4" /></Button>

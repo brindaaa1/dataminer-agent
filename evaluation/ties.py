@@ -7,4 +7,4 @@ def race_tie(scores: dict[str, float], mde: float, order: list[str]) -> dict:
     best = max(scores, key=scores.get)
     rank = lambda m: (order.index(m) if m in order else len(order), -scores[m])
     tied = sorted((m for m, s in scores.items() if scores[best] - s < mde or m == best), key=rank)
-    return {"recommended": tied[0], "tied": tied, "best": best, "mde": mde}
+    return {"recommended": tied[0], "tied": tied, "best": best, "mde": mde, "models": list(scores)}

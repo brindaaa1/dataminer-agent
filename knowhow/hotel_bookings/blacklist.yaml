@@ -34,6 +34,6 @@ meta:
 leakage_patterns:
   - "status"
   - "^assigned_"
-  - "_date$"                    # 除显式登记为 at_booking 的日期字段外
+  - "_date$"                    # 除显式登记为 at_prediction 的日期字段外
   - "actual"
   - "checkin|check_in|checkout|check_out"

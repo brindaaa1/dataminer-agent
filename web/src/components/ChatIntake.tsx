@@ -16,13 +16,10 @@ export function ChatIntake({ snap, extra, onSent }: { snap: Snapshot; extra: str
   return (
     <>
       <Bubble from="user">
-        <div className="font-medium">📎 {snap.data.csv_name}</div>
-        {snap.data.description && (
-          <details><summary className="cursor-pointer text-muted-foreground">业务说明</summary>
-            <p className="whitespace-pre-wrap">{snap.data.description}</p></details>
-        )}
+        <div className="mb-1 inline-flex items-center gap-1 rounded-md border bg-background px-2 py-0.5 text-xs">📎 {snap.data.csv_name}</div>
+        {snap.data.description && <p className="whitespace-pre-wrap">{snap.data.description}</p>}
       </Bubble>
-      {snap.data.n_rows != null && <Bubble>读完了：{snap.data.n_rows.toLocaleString()} 行、{snap.data.n_cols} 列。草稿在右侧「数据」。</Bubble>}
+      {snap.data.n_rows != null && <Bubble>读完了：{snap.data.n_rows.toLocaleString()} 行、{snap.data.n_cols} 列。草稿在右侧「过程」。</Bubble>}
       {snap.busy && <Bubble from="system"><Loader2 className="mr-1 inline size-3 animate-spin" />LLM 起草中…</Bubble>}
       {it && it.questions.length > 0 && (
         <QuestionCard key={it.round} questions={it.questions} extra={extra} pending={answers.isPending} onSubmit={(r) => answers.mutate(r)} />
@@ -38,7 +35,7 @@ export function ChatIntake({ snap, extra, onSent }: { snap: Snapshot; extra: str
         </Bubble>
       )}
       {it && Object.keys(it.yaml).length > 0 && (
-        <Bubble>配置已写好，右侧「数据」里可以看完整配置。
+        <Bubble>配置已写好，右侧「过程」里可以看完整配置。
           {snap.status === "config_ready" && (
             <div className="mt-2"><Button size="sm" onClick={() => run.mutate()} disabled={run.isPending}>确认配置并开始建模</Button></div>
           )}

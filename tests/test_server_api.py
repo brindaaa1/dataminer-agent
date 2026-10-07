@@ -61,7 +61,7 @@ def test_actions_in_wrong_state_are_rejected(client):
     tid = _create(c)
     assert c.post(f"/api/tasks/{tid}/run").status_code == 409                    # 配置还没确认
     assert c.post(f"/api/tasks/{tid}/accept", json={}).status_code == 409
-    assert c.post("/api/tasks/ex-hotel_deepseek3/run").status_code == 409        # 示例只读
+    assert c.post("/api/tasks/ex-hotel_deepseek/run").status_code == 409        # 示例只读
     assert c.get("/api/tasks/nope").status_code == 404
 
 
@@ -84,11 +84,11 @@ def test_stream_replays_after_last_event_id_then_goes_idle(client):
 
 def test_examples_are_listed_and_browsable(client):
     c = client
-    assert any(t["id"] == "ex-hotel_deepseek3" and t["example"] for t in c.get("/api/tasks").json())
-    s = c.get("/api/tasks/ex-hotel_deepseek3").json()
+    assert any(t["id"] == "ex-hotel_deepseek" and t["example"] for t in c.get("/api/tasks").json())
+    s = c.get("/api/tasks/ex-hotel_deepseek").json()
     assert s["readonly"] and s["run"]["rounds"]
-    assert "风险提示" in c.get("/api/tasks/ex-hotel_deepseek3/artifacts/model_card.md").text
-    assert c.get("/api/tasks/ex-hotel_deepseek3/bundle.zip").status_code == 200
+    assert "风险提示" in c.get("/api/tasks/ex-hotel_deepseek/artifacts/model_card.md").text
+    assert c.get("/api/tasks/ex-hotel_deepseek/bundle.zip").status_code == 200
 
 
 def test_clone_starts_from_confirmed_config(client):

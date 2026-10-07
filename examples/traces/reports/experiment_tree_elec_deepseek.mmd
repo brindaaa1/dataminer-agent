@@ -1,0 +1,22 @@
+flowchart TD
+  ROOT((start))
+  n_elec_deepseek_race_lgbm["elec_deepseek_race_lgbm<br/>RACE [low]<br/>AUC 0.9246<br/>PROMISING"]:::promising
+  n_elec_deepseek_race_catboost["elec_deepseek_race_catboost<br/>RACE [low]<br/>AUC 0.9230<br/>REJECT<br/>PLATEAU"]:::reject
+  n_elec_deepseek_race_random_forest["elec_deepseek_race_random_forest<br/>RACE [low]<br/>AUC 0.9177<br/>REJECT<br/>PSI_DRIFT,PLATEAU"]:::reject
+  n_elec_deepseek_e01["elec_deepseek_e01<br/>PROMOTE_FIDELITY [full]<br/>AUC 0.9255 (+0.0009)<br/>ACCEPT"]:::accept
+  n_elec_deepseek_e02["elec_deepseek_e02<br/>EXPAND_FEATURES [low]<br/>AUC 0.9253 (-0.0003)<br/>INCONCLUSIVE<br/>PLATEAU"]:::inconclusive
+  n_elec_deepseek_e03["elec_deepseek_e03<br/>TUNE [low]<br/>AUC 0.9244 (-0.0012)<br/>INCONCLUSIVE<br/>PLATEAU"]:::inconclusive
+  n_elec_deepseek_e04["elec_deepseek_e04<br/>TUNE [low]<br/>AUC 0.9225 (-0.0030)<br/>REJECT<br/>PLATEAU"]:::reject
+  ROOT --> n_elec_deepseek_race_lgbm
+  ROOT --> n_elec_deepseek_race_catboost
+  ROOT --> n_elec_deepseek_race_random_forest
+  n_elec_deepseek_race_lgbm --> n_elec_deepseek_e01
+  n_elec_deepseek_e01 --> n_elec_deepseek_e02
+  n_elec_deepseek_e01 --> n_elec_deepseek_e03
+  n_elec_deepseek_e01 --> n_elec_deepseek_e04
+  classDef accept fill:#c8e6c9,stroke:#2e7d32
+  classDef reject fill:#ffcdd2,stroke:#c62828
+  classDef inconclusive fill:#fff9c4,stroke:#f9a825
+  classDef promising fill:#bbdefb,stroke:#1565c0
+  classDef none fill:#eeeeee,stroke:#757575
+  classDef accept_inv,reject_inv,inconclusive_inv,promising_inv,none_inv fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray:4 3

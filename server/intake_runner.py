@@ -4,12 +4,13 @@
 import json
 
 from agent.llm import make_llm, redact
-from data.knowhow import load_config
+from data.knowhow import header, load_config
 from data.sample import ROOT
 from intake.session import IntakeFailed, IntakeSession
+from memory import preferences
 from runtime.events import EventLog
 from server import tasks
-from server.mock_intake import HotelIntakeMock
+from server.mock_intake import MockIntake
 
 _live: set[str] = set()         # 本进程里正在起草的任务：busy 标记还在但不在这里 → 起草被中断（web 服务重启）
 
@@ -40,7 +41,7 @@ def _guarded(fn):
 
 
 def _llm(provider: str):
-    return HotelIntakeMock() if provider == "mock" else make_llm(provider, load_config(str(ROOT / "config.yaml")))
+    return MockIntake() if provider == "mock" else make_llm(provider, load_config(str(ROOT / "config.yaml")))
 
 
 def _save(tid: str, s: IntakeSession, n0: int):
@@ -64,6 +65,7 @@ def _step(tid: str, s: IntakeSession, n0: int):
         return
     _save(tid, s, n0)
     if s.written:
+        preferences.remember(tasks.workspace() / "preferences.json", s.profile["columns"], s.written["draft"])
         _report(tid, s)
     tasks.update(tid, status="config_ready" if s.written else "intake", busy=False, error=None)
 
@@ -86,8 +88,10 @@ def _report(tid: str, s: IntakeSession):
 def start(tid: str):
     meta, d = tasks.load(tid), tasks.task_dir(tid)
     try:
-        s = IntakeSession(_llm(meta["provider"]), str(d / "input" / "data.csv"), (d / "input" / "description.md").read_text(),
-                          tasks.dataset_id(meta), str(d / "config"))
+        csv = str(d / "input" / "data.csv")
+        prefs = preferences.recall(tasks.workspace() / "preferences.json", header(csv))     # 用户偏好：作为推荐答案
+        s = IntakeSession(_llm(meta["provider"]), csv, (d / "input" / "description.md").read_text(),
+                          tasks.dataset_id(meta), str(d / "config"), prefs=prefs)
     except Exception as e:          # 数据读不了（不是 CSV 等）
         _fail(tid, e)
         return

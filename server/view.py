@@ -1,7 +1,9 @@
 """事件 + 实验记录 → 前端快照。纯函数：不读库、不读文件，输入由 sources.py / examples.py 收集。
 真实任务和示例任务走同一个 snapshot()，前端用同一套渲染。轮次划分复用 runtime/trace.py（已有测试）。"""
 import json
+import re
 
+from data.knowhow import load_config, load_domain
 from runtime.trace import PHASE_FINALE, PHASE_SETUP, build_trace, round_rows, segment_evaluations, summarize
 
 METRIC = {"auc": "AUC", "pr_auc": "PR-AUC", "ks": "KS"}
@@ -10,6 +12,11 @@ TONE = {"ACCEPT": "ok", "PROMISING": "warn", "INCONCLUSIVE": "neutral", "REJECT"
 ACTIONS = {"RACE": "模型赛跑", "TUNE": "调参", "SWITCH_MODEL": "换模型", "PROMOTE_FIDELITY": "全量复验",
            "EXPAND_FEATURES": "加特征", "PRUNE_FEATURES": "删特征", "BACKTRACK": "回退", "INVESTIGATE": "查数据",
            "ESCALATE_HUMAN": "请求人工", "STOP": "停止"}
+# 用户视图：业务语言，不出现内部术语（开发者视图保留原样）
+ACTIONS_USER = {**ACTIONS, "PROMOTE_FIDELITY": "用全量数据复验", "INVESTIGATE": "分析数据"}
+STOP_USER = {"LLM_STOP": "agent 判断继续尝试的收益低于成本，主动停止", "NO_PROGRESS": "连续几轮没有更好的结果，停止",
+             "MAX_ROUNDS": "达到轮数上限", "DECIDE_FAILED": "后续决策不合格，带着已有模型收尾", "BUDGET_EXHAUSTED": "预算用完",
+             "TARGET_REACHED": "达到目标效果", "OOT_BUDGET_EXHAUSTED": "时间外验证的次数用完"}
 STOP_REASONS = {"MAX_ROUNDS": "达到最大轮数", "OOT_BUDGET_EXHAUSTED": "OOT-dev 比较次数用完", "TARGET_REACHED": "达到目标指标"}
 STAGE = {"intake": "intake", "intake_failed": "intake", "config_ready": "confirm", "running": "modeling",
          "stopped": "modeling", "failed": "modeling", "done": "report", "accepted": "report"}
@@ -56,20 +63,28 @@ def display(key: str, recommended: str) -> str:
 
 
 def _group(name: str, f: dict, d: dict) -> str:
-    if name in d["leakage"] or f["availability"] in ("at_checkin", "post_outcome"):
+    if name in d["leakage"] or f["availability"] in ("before_outcome", "post_outcome"):
         return "leak"
     if f["availability"] == "meta":
         return "meta"
-    if name in d["quarantine"] or f["availability"] not in ("at_booking", "history"):
+    if name in d["quarantine"] or f["availability"] not in ("at_prediction", "history"):
         return "quarantine"
     return "ok"
+
+
+def _history_text(h: dict | None) -> str | None:
+    if not h or not (h.get("lags") or h.get("means")):
+        return None
+    parts = ([f"前 {'、'.join(map(str, h['lags']))} 条"] if h.get("lags") else []) + [f"过去 {n} 条均值" for n in h.get("means") or []]
+    return "历史值可用：" + "，".join(parts)
 
 
 def _draft(d: dict, confirmed: dict) -> dict:
     return {"label": _label_text(d["label"]) if d["label"] else None, "observation_time_expr": d["observation_time_expr"],
             "windows": d["windows"], "metric": _metric_text(d["metric"]) if d["metric"] else None,
+            "domain": load_domain(d.get("domain"), load_config()).get("title"), "data_summary": d.get("data_summary") or None,
             "fields": [{"name": k, "type": f["type"], "availability": f["availability"], "reason": f.get("reason", ""),
-                        "group": _group(k, f, d)} for k, f in d["fields"].items()],
+                        "group": _group(k, f, d), "history": _history_text(f.get("history"))} for k, f in d["fields"].items()],
             "confirmed": sorted(confirmed)}
 
 
@@ -98,21 +113,23 @@ def _round(s: dict, row: dict, recs: dict, trials: dict, pm: str, running: bool)
     d = s["decision"] or {}
     evs = list({e["exp_id"]: e for e in segment_evaluations(s, list(recs.values()))}.values())   # 续跑重做的状态会再评估一次：同一实验只留最后一条
     m =(recs.get((s["recorded"] or {}).get("exp_id")) or {}).get("metrics") or {}
-    if not m and evs:                     # 准备阶段（模型赛跑）：取时间外主指标最高的一个
-        m = max(evs, key=lambda x: (x.get("metrics") or {}).get(f"oot_dev_{pm}") or -1).get("metrics") or {}
+    if not m and evs:                     # 准备阶段（模型赛跑）：取时间外主指标最高的一个；评估事件里没有训练集指标，从实验记录补
+        b = max(evs, key=lambda x: (x.get("metrics") or {}).get(f"oot_dev_{pm}") or -1)
+        m = {**((recs.get(b["exp_id"]) or {}).get("metrics") or {}), **(b.get("metrics") or {})}
     action = row["动作"]
     return {"key": "setup" if s["kind"] == PHASE_SETUP else f"r{s['round']}", "title": row["段"], "action": action,
             "action_label": ACTIONS.get(action, action or "决策中"), "verdict": row["结论"],
             "codes": row["诊断码"].split(", ") if row["诊断码"] else [],
             "metrics": {"train": m.get(f"train_{pm}"), "valid": m.get(f"valid_{pm}"), "oot_dev": m.get(f"oot_dev_{pm}"),
                         "oot_dev_ks": m.get("oot_dev_ks"), "gap": m.get("gap")},
-            "hypothesis": d.get("hypothesis"), "alternatives": d.get("alternatives_considered") or [],
+            "hypothesis": d.get("hypothesis"), "user_note": d.get("user_note") or None, "alternatives": d.get("alternatives_considered") or [],
             "stop_reason": (d.get("params") or {}).get("reason") if action == "STOP" else None,
             "evaluations": [{"exp_id": e["exp_id"], "model": e.get("model"), "fidelity": e.get("fidelity"),
                              "verdict": e.get("verdict"), "codes": e.get("codes") or [],
                              "oot_dev": (e.get("metrics") or {}).get(f"oot_dev_{pm}")} for e in evs],
             "llm_calls": len(s["llm_calls"]), "running": running and not s["recorded"] and action != "STOP",
             "tie": next((e["payload"] for e in s["events"] if e["type"] == "race_tie"), None), "by_rule": s["by_rule"],
+            "action_user": ACTIONS_USER.get(action, action or "决策中"),
             "trials": {e: trials.get(e, []) for e in s["exp_ids"]}}
 
 
@@ -135,6 +152,46 @@ def _say(rd: dict, kind: str, L: str) -> dict:
     text = f"{head}：{VERDICT.get(v, v)}" + (f" · 时间外 {L} {_f(m['oot_dev'])}" if m["oot_dev"] is not None else "") + \
         (f"，gap {_f(m['gap'])}" if m["gap"] is not None else "") + (f"（{'、'.join(rd['codes'])}）" if rd["codes"] else "")
     return {"key": rd["key"], "text": text, "tone": TONE.get(v, "neutral")}
+
+
+def _brief(rounds: list[dict], sm: dict, ev: list[dict], recs: dict, pm: str, L: str) -> list[dict]:
+    """用户视图的对话：只播关键节点（赛跑结果、第一个可用模型、模型变好、正在做什么、停止、最终检验），业务语言。
+    提到时间外验证的表现时，同时给出训练集的表现。"""
+    perf = lambda m: f"时间外验证 {L} {_f(m.get('oot_dev'))}（训练集 {_f(m.get('train'))}）"
+    out, found = [], False
+    for rd in rounds:
+        if rd["key"] == "setup":
+            ev_ = [e for e in rd["evaluations"] if e["oot_dev"] is not None]
+            if ev_:
+                best = max(ev_, key=lambda e: e["oot_dev"])
+                t = rd["tie"]
+                pick = (f"，{'、'.join(t['tied'])} 效果相当，选 {t['recommended']}" if t and len(t["tied"]) > 1 else f"，{best['model']} 最好")
+                tr = ((recs.get(best["exp_id"]) or {}).get("metrics") or {}).get(f"train_{pm}")      # 评估事件里没有训练集指标
+                head = f"先试了 {'、'.join(e['model'] for e in ev_)}{pick}" if len(ev_) > 1 else f"先用 {best['model']} 试了一下"
+                out.append({"key": "setup", "text": f"{head}：{perf({'oot_dev': best['oot_dev'], 'train': tr})}", "tone": "neutral"})
+            continue
+        n = rd["title"]
+        if rd["running"]:
+            out.append({"key": rd["key"], "text": f"{n}：正在{rd['action_user']}…" if rd["action"] else f"{n}：正在想下一步…", "tone": "running"})
+        elif rd["verdict"] == "ACCEPT":
+            rec = next((e for e in rd["evaluations"] if e["verdict"] == "ACCEPT"), {})
+            what = f"得到第一个可用的模型（{rec.get('model')}）" if not found else f"模型变好了（{rd['action_user']}）"
+            found = True
+            out.append({"key": rd["key"], "text": f"{n}：{what}，{perf(rd['metrics'])}", "tone": "ok"})
+    r = sm["stop_reason"]
+    if r:
+        out.append({"key": "stop", "text": "停止：" + STOP_USER.get(r.split(":")[0], r), "tone": "neutral"})
+    if f := sm["final"]:
+        tr = ((recs.get(f["exp_id"]) or {}).get("metrics") or {}).get(f"train_{pm}")
+        out.append({"key": "final", "tone": "bad" if f.get("overfit_to_oot_dev") else "ok",
+                    "text": f"最终检验：{L} {_f(f.get(f'holdout_{pm}'))}（训练集 {_f(tr)}，时间外验证 {_f(f.get(f'oot_dev_{pm}'))}）"
+                            + (f"，比时间外验证{_lower(f.get('drop'))}，可能过拟合" if f.get("overfit_to_oot_dev") else "")})
+    for e in ev:
+        if e["type"] == "final_gate_skipped":
+            out.append({"key": "final", "text": "没有得到可用的模型", "tone": "warn"})
+        elif e["type"] == "worker_error":
+            out.append({"key": f"error-{e['id']}", "text": f"运行出错：{e['payload']['error']}", "tone": "bad"})
+    return out
 
 
 def _lower(drop) -> str:
@@ -175,8 +232,23 @@ def _final(f: dict | None, recs: dict, pm: str, files: dict) -> dict | None:
     return {"exp_id": f["exp_id"], "model": (rec.get("config") or {}).get("model"), "oot_dev": f.get(f"oot_dev_{pm}"),
             "holdout": f.get(f"holdout_{pm}"), "holdout_ks": f.get("holdout_ks"), "drop": f.get("drop"),
             "overfit": bool(f.get("overfit_to_oot_dev")), "n_experiments": len(recs),
-            "n_accepted": sum(r.get("verdict") == "ACCEPT" for r in recs.values()),
-            "risks": risks(files.get("model_card.md", ""))}
+            "n_accepted": sum(r.get("verdict") == "ACCEPT" for r in recs.values()), "lift_top10": f.get("holdout_lift_top10"),
+            "risks": (rk := risks(files.get("model_card.md", ""))), "risks_user": _user_risks(f, rk)}
+
+
+def _user_risks(f: dict, rk: list[str]) -> list[str]:
+    """用户视图的风险：只留要用户处理的（疑似过拟合、反直觉特征、合规字段），换成平实说法。"""
+    out = []
+    if f.get("overfit_to_oot_dev"):
+        ref = f.get("reference_drop")
+        out.append(f"最终检验比时间外验证低 {_f(f['drop'])}" + (f"（默认参照模型自己低 {_f(ref)}）" if ref is not None else "")
+                   + "，模型在新的时间段上可能不稳。")
+    for x in rk:
+        if m := re.search(r"特征 `(.+?)` 的 SHAP 方向", x):
+            out.append(f"特征 {m.group(1)} 的影响方向和业务常识相反，建议人工确认。")
+        elif x.startswith("合规待审字段在最终特征中："):
+            out.append("最终模型用到了需要合规审核的字段：" + x.split("：", 1)[1])
+    return out
 
 
 def _run(ev: list[dict], records: list[dict], trials: dict, status: str, settings: dict, files: dict) -> dict | None:
@@ -198,7 +270,7 @@ def _run(ev: list[dict], records: list[dict], trials: dict, status: str, setting
                           "value": rd["metrics"]["oot_dev"], "verdict": rd["verdict"]})
     sm = summarize(trace)
     return {"metric": pm, "max_rounds": settings.get("max_rounds"), "rounds": rounds, "chart": chart,
-            "narration": narration + _closing(ev, sm, pm, L), "final": _final(sm["final"], recs, pm, files),
+            "narration": narration + _closing(ev, sm, pm, L), "brief": _brief(rounds, sm, ev, recs, pm, L), "final": _final(sm["final"], recs, pm, files),
             "tree": [{"exp_id": r["exp_id"], "parent": r["parent_exp_id"], "verdict": r["verdict"],
                       "label": f"{ACTIONS.get(r['action_type'], r['action_type'])} · {(r.get('config') or {}).get('model', '')} · {r['fidelity']}"}
                      for r in records]}

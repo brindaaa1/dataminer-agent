@@ -40,6 +40,16 @@ def merge_rows(old: list[dict], new: list[dict]) -> list[dict]:
     return [r for r in old if (r["dataset"], r["seed"]) not in done] + new
 
 
+def _copy_memory(src_ds: Path, seed: int, dst: Path):
+    """memory 评测（--memory-from）：拷指定版本里"下一个"种子跑完后的 memory 库，种子 1 用种子 0 的、种子 0 用最后一个的。
+    同一种子的库里就是这次运行本身，拿来热启动等于作弊。"""
+    seeds = sorted(int(d.name[1:]) for d in src_ds.glob("s[0-9]*") if d.name[1:].isdigit() and int(d.name[1:]) != seed)
+    if seeds:
+        o = max((s for s in seeds if s < seed), default=seeds[-1])
+        if (src_ds / f"s{o}" / f"memory_s{o}.db").exists():
+            shutil.copy(src_ds / f"s{o}" / f"memory_s{o}.db", dst)
+
+
 def build_cfg(name: str, label: str, seed: int, sub: str | None = None) -> dict:
     cfg = load_config(str(ROOT / "config.yaml"))
     d, art = DATASETS[name], art_dir(label, name, sub or seed)
@@ -47,6 +57,9 @@ def build_cfg(name: str, label: str, seed: int, sub: str | None = None) -> dict:
     cfg["datasets"][d["dataset"]]["tables"] = d["tables"]
     cfg["paths"].update(artifacts_root=str(art), reports_root=str(art / "reports"))
     cfg["memory"]["db"] = str(art / f"memory_s{seed}.db")
+    src = os.environ.get("DATAMINER_EVAL_MEMORY_FROM")
+    if src and sub is None and not Path(cfg["memory"]["db"]).exists():
+        _copy_memory(RUNS / src / name, seed, Path(cfg["memory"]["db"]))
     cfg["run"]["max_rounds"], cfg["run"]["seed"] = SETTINGS["max_rounds"], seed
     cfg["split"]["seed"] = SETTINGS["split_seed"]
     cfg["fidelity"]["low"].update(sample_frac=SETTINGS["low_sample_frac"], n_trials=SETTINGS["low_trials"])

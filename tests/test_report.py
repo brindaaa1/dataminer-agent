@@ -40,6 +40,7 @@ def test_model_card_content(tmp_path):
         assert sec in card
     assert "```mermaid" in card and "holdout" in card and o.p["best_exp_id"] in card
     assert "未生成摘要" not in card                                      # mock 摘要通过了数字校验
+    assert "正类比例" in card and "坏样本" not in card                     # 不只聚焦风控：用通用说法
     best = o._result(o.p["best_exp_id"])
     assert f"{best['metrics']['oot_dev_auc']:.4f}" in card              # 指标来自代码，不是 LLM
     assert (tmp_path / "rep" / "experiment_tree_t1.mmd").exists()
@@ -91,3 +92,29 @@ def test_model_card_lists_tied_race_models(tmp_path):
     p = {**o.p, "race_tie": {"recommended": "lgbm", "tied": ["lgbm", "catboost"], "best": "catboost", "mde": 0.0099}}
     card = open(build_report(cfg, o.spec, o.store, p, o.p["final"], 3, PolicyMockLLM())["model_card"]).read()
     assert "赛跑打平" in card and "lgbm、catboost" in card and "0.0099" in card
+
+
+def test_final_gate_and_model_card_have_report_metrics(tmp_path):
+    """补充参考指标在 holdout 上算一次，写进模型卡；不参与选模型。"""
+    cfg = make_toy(tmp_path)
+    o = Orchestrator(toy_spec(cfg), cfg, PolicyMockLLM(), FinalGate("toy", cfg, "t1"), "t1")
+    o.run()
+    f = o.p["final"]
+    assert {"holdout_brier", "holdout_lift_top10", "holdout_recall_top10"} <= set(f) and f["holdout_lift_top10"] > 1
+    card = open(f"{cfg['paths']['reports_root']}/model_card_t1.md").read()
+    assert "头部 10%" in card and "Brier" in card
+
+
+def test_setup_section_explains_params_for_reproduction():
+    from report.model_card import setup_section
+    from types import SimpleNamespace
+    cfg = {"fidelity": {"full": {"early_stopping_rounds": 50}}, "inner_loop": {"n_rounds_max": 500}, "split": {"valid_frac": 0.2, "seed": 42}}
+    spec = SimpleNamespace(oot_windows={"oot_dev": ["2020-01", "2020-03"], "holdout": ["2020-04", "2020-06"]})
+    best = {"model": "lgbm", "n_trials": 20, "n_rows": 1000, "best_iter": 87, "n_features": 2,
+            "best_params": {"learning_rate": 0.0312345, "num_leaves": 31},
+            "config": {"model": "lgbm", "features": ["a", "b_lag1"], "seed": 3}}
+    s = "\n".join(setup_section(cfg, spec, best, "auc"))
+    assert s.startswith("## 9. 模型设定（复现用）")
+    for t in ["随机种子 3", "20 组参数", "valid 段 AUC 最高", "train 段 1,000 行", "随机抽出的 20%（种子 42）", "时间外验证 2020-01 ~ 2020-03", "连续 50 轮", "实际用了 87 棵树",
+              "| learning_rate | 0.0312345 | 学习率", "| num_leaves | 31 | ", "`a`、`b_lag1`"]:
+        assert t in s, t

@@ -32,7 +32,7 @@ def _good():
         "label": {"col": "is_canceled", "definition": "订单被取消"},
         "observation_time_expr": DATE, "split_time_expr": DATE,
         "windows": {"train_valid": ["2015-01", "2015-12"], "oot_dev": ["2016-01", "2016-12"], "holdout": ["2017-01", "2017-12"]},
-        "fields": {"lead_time": {"type": "numeric", "availability": "at_booking"}},
+        "fields": {"lead_time": {"type": "numeric", "availability": "at_prediction"}},
         "leakage": ["status_date"], "metric": {"primary": "auc", "guards": {"pr_auc": 0.02}}})
 
 
@@ -145,7 +145,7 @@ def test_schema_error_is_fed_back_for_rewrite(tmp_path):
     from agent.llm import ScriptedLLM
     from intake.session import IntakeSession
     full = _good().model_dump(mode="json")
-    wrong = {**full, "fields": {"lead_time": {"type": "meta", "availability": "at_booking"}}}
+    wrong = {**full, "fields": {"lead_time": {"type": "meta", "availability": "at_prediction"}}}
     llm = ScriptedLLM([wrong, full])
     s = IntakeSession(llm, _csv(tmp_path), "x", "t4", str(tmp_path / "o"))
     s.step()
@@ -170,7 +170,7 @@ def _str_draft(pos="Canceled", neg="Kept"):
         "label": {"col": "order status", "positive": pos, "negative": neg, "definition": "取消"},
         "observation_time_expr": e, "split_time_expr": e,
         "windows": {"train_valid": ["2015-01", "2015-12"], "oot_dev": ["2016-01", "2016-12"], "holdout": ["2017-01", "2017-12"]},
-        "fields": {"lead_time": {"type": "numeric", "availability": "at_booking"}}, "metric": {"primary": "auc"}})
+        "fields": {"lead_time": {"type": "numeric", "availability": "at_prediction"}}, "metric": {"primary": "auc"}})
 
 
 def test_label_values_drive_the_split(tmp_path):
@@ -216,7 +216,7 @@ def test_confirmed_values_are_what_gets_written(tmp_path):
 def test_non_date_fields_typed_date_are_rejected(tmp_path):
     from intake.validate import validate
     d = _good().model_copy(update={"fields": {**_good().fields}})
-    d.fields["order_year"] = type(d.fields["lead_time"])(type="date", availability="at_booking")
+    d.fields["order_year"] = type(d.fields["lead_time"])(type="date", availability="at_prediction")
     errs = validate(d, _csv(tmp_path))
     assert any("order_year" in e and "date" in e for e in errs)
     d.fields.pop("order_year")
@@ -253,3 +253,49 @@ def test_accepting_keeps_the_value_visible_to_the_llm(tmp_path):
     s.step()
     s.answer({"metric": "确认"})
     assert "pr_auc" in s.answers["metric"]
+
+
+def test_domain_is_recommended_validated_and_written(tmp_path):
+    """接入起草时 LLM 从领域手册里推荐一个领域（上下文里有可选领域），代码校验名字合法，写进 data_dictionary 的 domain。"""
+    import yaml
+    from agent.llm import ScriptedLLM
+    from intake.session import IntakeSession
+    from intake.validate import validate
+    csv = _csv(tmp_path)
+    assert any("domain" in e for e in validate(_good().model_copy(update={"domain": "nope"}), csv))
+    full = {**_good().model_dump(mode="json"), "domain": "credit_risk"}
+    llm = ScriptedLLM([full, full])
+    s = IntakeSession(llm, csv, "预测借款人是否违约", "t_dom", str(tmp_path / "o"))
+    s.answer({q.key: q.recommended for q in s.step()})
+    assert s.step() == [] and "credit_risk" in llm.calls[0]
+    assert yaml.safe_load(s.written["yaml"]["data_dictionary.yaml"])["domain"] == "credit_risk"
+
+
+def test_generic_availability_values_are_accepted(tmp_path):
+    from intake.schemas import IntakeDraft
+    from intake.validate import validate
+    d = _good().model_dump(mode="json")
+    d["fields"]["lead_time"]["availability"] = "at_prediction"
+    assert validate(IntakeDraft.model_validate(d), _csv(tmp_path)) == []
+    d["fields"]["lead_time"]["availability"] = "before_outcome"
+    IntakeDraft.model_validate(d)
+
+
+def test_draft_carries_a_data_summary_written_by_the_llm():
+    """过程页的数据预览不写代码做表格，由起草的 LLM 顺带写几句数据描述。"""
+    from intake.schemas import IntakeDraft
+    d = IntakeDraft.model_validate({**_good().model_dump(mode="json"), "data_summary": "每行是一笔预订。"})
+    assert d.data_summary == "每行是一笔预订。" and IntakeDraft().data_summary == ""
+
+
+def test_history_fields_are_drafted_and_written(tmp_path):
+    """当前值是泄漏、但过去的取值在预测时已知的字段：起草时标 history（取前几条、过去几条的均值），写进数据字典。"""
+    import yaml
+    from intake.schemas import IntakeDraft
+    from intake.writer import write
+    d = _good().model_dump(mode="json")
+    d["fields"]["status_date"] = {"type": "numeric", "availability": "post_outcome", "history": {"lags": [1, 2], "means": [48]}}
+    w = write(IntakeDraft.model_validate(d), "t_hist", _csv(tmp_path), str(tmp_path / "o"))
+    dic = yaml.safe_load(w["yaml"]["data_dictionary.yaml"])
+    assert dic["fields"]["status_date"]["history"] == {"lags": [1, 2], "means": [48]}
+    assert "history" not in dic["fields"]["lead_time"]

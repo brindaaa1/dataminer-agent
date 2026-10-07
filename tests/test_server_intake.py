@@ -94,3 +94,30 @@ def test_exception_outside_drafting_still_clears_busy(ws, monkeypatch):
     intake_runner.answer(tid, {})
     m = tasks.load(tid)
     assert m["status"] == "intake_failed" and m["busy"] is False and "KeyError" in m["error"]
+
+
+def test_confirmed_answers_are_remembered_for_the_next_upload(ws):
+    """确认过的口径记进 workspace/preferences.json；同一结构的数据再上传时，作为推荐答案进入下一次起草。"""
+    from server import intake_runner, tasks
+    tid = _task()["id"]
+    intake_runner.start(tid)
+    intake_runner.answer(tid, {q["key"]: q["recommended"] for q in _questions(tid)})
+    assert (ws / "preferences.json").exists()
+    tid2 = _task()["id"]
+    intake_runner.start(tid2)
+    state = json.loads((tasks.task_dir(tid2) / "intake.json").read_text())
+    assert state["prefs"]["same_data"]["label"]["col"] == "is_canceled"
+
+
+def test_mock_intake_recognizes_the_electricity_sample():
+    """没有 key 也能用 Elec2 样本走完整流程：mock 起草按列名认出是哪份样本，回放录制时确认过的配置（含历史值）。"""
+    import json
+    from intake.draft import parse
+    from server.mock_intake import MockIntake
+    from intake.profile import profile
+    from data.sample import ROOT
+    ctx = lambda csv: "```json\n" + json.dumps({"profile": profile(str(csv)), "description": "", "answers": {}}, ensure_ascii=False) + "\n```"
+    elec = parse(MockIntake().complete("", ctx(ROOT / "data_sample" / "electricity" / "electricity_nsw.csv"))[0])
+    assert elec.label.col == "price_direction" and elec.fields["nsw_price"].history.lags
+    hotel = parse(MockIntake().complete("", ctx(ROOT / "data_sample" / "hotel_bookings" / "hotel_bookings_sample.csv"))[0])
+    assert hotel.label.col == "is_canceled"

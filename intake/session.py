@@ -10,7 +10,7 @@ from intake.validate import missing_confirmations, validate, value
 from intake.writer import register, write
 
 STATE_KEYS = ("csv", "description", "dataset_id", "out_dir", "max_rounds", "max_retries",
-              "answers", "events", "round", "written", "profile", "confirmed", "shown", "last_draft")
+              "answers", "events", "round", "written", "profile", "confirmed", "shown", "last_draft", "prefs")
 ACCEPT = ("确认", "采纳")          # 表单里原样提交推荐答案，或回答"确认"，都算采纳
 
 
@@ -19,8 +19,10 @@ class IntakeFailed(RuntimeError):
 
 
 class IntakeSession:
-    def __init__(self, llm, csv_path, description, dataset_id, out_dir, max_rounds=3, max_retries=2):
+    def __init__(self, llm, csv_path, description, dataset_id, out_dir, max_rounds=3, max_retries=2, prefs=None):
+        """prefs：用户偏好（memory/preferences.recall），作为推荐答案放进起草上下文。"""
         self.llm, self.csv, self.description, self.dataset_id, self.out_dir = llm, csv_path, description, dataset_id, out_dir
+        self.prefs = prefs
         self.max_rounds, self.max_retries = max_rounds, max_retries
         self.answers, self.events, self.round, self.written = {}, [], 0, None
         self.confirmed, self.shown, self.last_draft = {}, {}, None     # confirmed：必答项 → 用户确认时草稿里的值
@@ -37,7 +39,7 @@ class IntakeSession:
         self.round += 1
         feedback = None
         for _ in range(self.max_retries + 1):
-            reply, prompt = draft(self.llm, self.profile, self.description, self.answers, feedback)
+            reply, prompt = draft(self.llm, self.profile, self.description, self.answers, feedback, self.prefs)
             self._log("llm_call", {"prompt": prompt, "response": reply})
             try:
                 d = parse(reply)
@@ -59,7 +61,7 @@ class IntakeSession:
         self._log("questions", [q.model_dump() for q in qs])
         if not qs:
             final = IntakeDraft.model_validate({**self.last_draft, **{k: self.confirmed[k]["raw"] for k in REQUIRED}})
-            self.written = write(final, self.dataset_id, self.csv, self.out_dir)
+            self.written = {**write(final, self.dataset_id, self.csv, self.out_dir), "draft": final.model_dump(mode="json")}
             self._log("written", {k: v for k, v in self.written.items() if k != "csv"})
         return qs
 

@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { TaskSummary } from "@/api"
+import { setDev } from "@/useDev"
 import { TaskRail } from "./TaskRail"
 
 const t = (id: string, title: string, ev: TaskSummary["eval"] = null): TaskSummary =>
@@ -10,7 +11,8 @@ const tasks = [t("a", "hotel · 10-02"), t("ev-v9_hotel_s0", "hotel · 种子 0"
   t("ev-v8_hotel_s0", "hotel · 种子 0", { label: "v8", tier: "fast", conclusion: null, running: false }),
   t("ev-v10_hotel_s0", "hotel · 种子 0", { label: "v10", tier: "fast", conclusion: null, running: true })]
 
-test("评测运行按版本分组，版本标题带档位和结论，点种子选中它", () => {
+test("开发者视图：评测运行按版本分组，版本标题带档位和结论，点种子选中它", () => {
+  act(() => setDev(true))
   const sel = vi.fn()
   render(<QueryClientProvider client={new QueryClient()}><TaskRail tasks={tasks} current={null} onSelect={sel} /></QueryClientProvider>)
   fireEvent.click(screen.getByLabelText("任务列表"))                       // 展开侧栏
@@ -21,4 +23,11 @@ test("评测运行按版本分组，版本标题带档位和结论，点种子�
   fireEvent.click(screen.getByText("情景 leak @ hotel"))
   expect(sel).toHaveBeenCalledWith("ev-v9_scn_leak_hotel")
   expect(screen.getAllByTitle("复制为新任务")).toHaveLength(1)          // 只有普通任务能复制
+})
+
+test("用户视图：左侧没有评测运行", () => {
+  act(() => setDev(false))
+  render(<QueryClientProvider client={new QueryClient()}><TaskRail tasks={tasks} current={null} onSelect={vi.fn()} /></QueryClientProvider>)
+  fireEvent.click(screen.getByLabelText("任务列表"))
+  expect(screen.queryByText("评测运行")).toBeNull()
 })

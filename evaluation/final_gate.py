@@ -7,7 +7,7 @@ from sklearn.metrics import roc_auc_score
 
 from data.access import DataAccess, issue_holdout_token
 from evaluation.compare import monthly_auc
-from evaluation.metrics import all_metrics, primary
+from evaluation.metrics import all_metrics, primary, report_metrics
 from modeling.inner_loop import fit_and_predict
 
 
@@ -34,6 +34,7 @@ class FinalGate:
         hm = all_metrics(h["_label"].values, p)
         drop = float(oot - hm[pm])
         res = {"exp_id": exp_id, "metric": pm, **{f"holdout_{k}": v for k, v in hm.items()},
+               **{f"holdout_{k}": v for k, v in report_metrics(h["_label"].values, p).items()},     # 补充参考指标：只报告
                f"oot_dev_{pm}": float(oot), "drop": drop, "reference_drop": ref_drop,
                "overfit_to_oot_dev": bool(drop - (ref_drop or 0.0) > self.cfg["final_gate"]["delta"]),
                "n_holdout": int(len(h)), "holdout_bad_rate": float(h["_label"].mean()), **(extra or {})}

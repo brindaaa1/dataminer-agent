@@ -35,6 +35,13 @@ class LGBMSpec:
     native_metric = {"auc": "auc", "pr_auc": "average_precision", "ks": "auc"}   # 早停与剪枝用的内置指标；KS 无内置实现，用 AUC 近似
     preprocessing = ["native_missing", "categorical_native"]
     supports = {"monotone_constraints": True, "shap": True}
+    train_doc = "目标函数 binary，缺失值和类别列交给 LightGBM 原生处理；在 train 段训练，valid 段早停（连续 {es} 轮没有提升就停，最多 {max_trees} 棵树），实际用了 {best_iter} 棵树"
+    param_doc = {"learning_rate": "学习率：每棵树修正结果的幅度，越小越稳，但需要更多树",
+                 "num_leaves": "每棵树的叶子数：越大越能拟合复杂关系，也越容易过拟合",
+                 "min_child_samples": "每个叶子至少包含的样本数：越大越保守",
+                 "feature_fraction": "每棵树随机使用的特征比例",
+                 "bagging_fraction": "每棵树随机使用的样本比例",
+                 "lambda_l2": "L2 正则：越大，叶子上的分数越向 0 收缩"}
     default_space = {
         "learning_rate": {"low": 0.01, "high": 0.2, "log": True},
         "num_leaves": {"low": 8, "high": 128, "type": "int", "log": True},
@@ -70,6 +77,9 @@ class LRScorecardSpec:
     profile = "分箱 + WOE + 逻辑回归，可解释、跨时间最稳；表达不了非线性交互，上限低。"
     preprocessing = ["woe_binning"]
     supports = {"monotone_constraints": False, "shap": False}
+    train_doc = "数值特征按分位数分箱、类别特征每个取值一箱（出现少于 50 次的合并），缺失单独一箱，各箱转成 WOE 后在 train 段训练逻辑回归"
+    param_doc = {"C": "正则强度的倒数：越小，系数越向 0 收缩",
+                 "n_bins": "数值特征分成的箱数"}
     default_space = {"C": {"low": 1e-3, "high": 10.0, "log": True},
                      "n_bins": {"low": 5, "high": 20, "type": "int"}}
 
@@ -129,6 +139,11 @@ class CatBoostSpec:
     native_metric = {"auc": "AUC", "pr_auc": "PRAUC", "ks": "AUC"}
     preprocessing = ["categorical_native"]
     supports = {"monotone_constraints": False, "shap": True}
+    train_doc = "类别列转成字符串原样输入（缺失单独一类）；在 train 段训练，valid 段早停（连续 {es} 轮没有提升就停），实际用了 {best_iter} 棵树"
+    param_doc = {"depth": "每棵树的深度：越深越能拟合复杂关系，也越容易过拟合",
+                 "learning_rate": "学习率：每棵树修正结果的幅度，越小越稳，但需要更多树",
+                 "l2_leaf_reg": "L2 正则：越大，叶子上的分数越向 0 收缩",
+                 "iterations": "最多训练的树数（早停可能提前结束）"}
     default_space = {
         "depth": {"low": 3, "high": 8, "type": "int"},
         "learning_rate": {"low": 0.01, "high": 0.2, "log": True},
@@ -164,6 +179,11 @@ class RandomForestSpec:
     profile = "bagging，方差低，valid 与 OOT-dev 的差距通常更小；OVERFIT_GAP 频繁时是稳健的替代。排序能力上限一般低于提升树。"
     preprocessing = ["ordinal_codes"]
     supports = {"monotone_constraints": False, "shap": False}
+    train_doc = "类别列转成整数编码，在 train 段训练，不用早停"
+    param_doc = {"max_depth": "每棵树的最大深度",
+                 "min_samples_leaf": "每个叶子至少包含的样本数：越大越保守",
+                 "max_features": "每次分裂随机考虑的特征比例",
+                 "n_estimators": "树的数量"}
     default_space = {
         "max_depth": {"low": 4, "high": 16, "type": "int"},
         "min_samples_leaf": {"low": 5, "high": 200, "type": "int", "log": True},

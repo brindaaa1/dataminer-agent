@@ -10,6 +10,10 @@ def test_within_mde_is_a_tie_and_preference_order_decides():
     assert t["tied"] == ["random_forest", "catboost"] and t["recommended"] == "random_forest" and t["best"] == "random_forest"
 
 
+def test_tie_records_which_models_raced():
+    assert race_tie({"lgbm": 0.65}, 0.01, ORDER)["models"] == ["lgbm"]
+
+
 def test_clear_winner_is_recommended_even_if_last_in_order():
     t = race_tie({"catboost": 0.8366, "lgbm": 0.8241, "random_forest": 0.8282}, 0.0083, ORDER)
     assert t["tied"] == ["catboost"] and t["recommended"] == "catboost"

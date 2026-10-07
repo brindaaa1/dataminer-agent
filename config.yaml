@@ -1,6 +1,7 @@
 # 所有阈值集中在此，代码中不硬编码。
 paths:
   knowhow_root: knowhow          # 仓库自带，见 knowhow/README.md
+  domains_root: knowhow/domains  # 领域手册；接入新数据时 knowhow_root 会改指向生成的目录，手册仍从这里读
   artifacts_root: artifacts      # 运行时产物（切分、模型、日志）；不提交到 git
   reports_root: reports          # 运行时产物（模型卡、实验树）；不提交到 git
 
@@ -109,8 +110,9 @@ decide:
   policy_deviation_min_rationale_chars: 20
 
 race:
-  models: [lgbm, catboost]     # 赛跑只在这些模型里选（LLM 提名取交集）；随机森林、评分卡之后仍可 SWITCH_MODEL
-  tie_preference: [lgbm, random_forest, lr_scorecard, catboost]   # 赛跑打平（差距 < MDE）时按这个顺序推荐；行业里越常见越靠前
+  models: [lgbm, catboost]     # 核心模型：赛跑必跑（随机森林每次 30–44 秒、几乎没赢过，不在核心里）
+  max_extra: 2                 # LLM 在 PLAN 里提名的其他模型最多追加几个参赛（只能补充、不能砍掉核心）
+  tie_preference: [catboost, lgbm, random_forest, lr_scorecard]   # 赛跑打平（差距 < MDE）时按这个顺序推荐；v7–v11 两份数据上 catboost 当最终模型 holdout 都更高
   rule_first_promotion: true   # 赛跑后第一次升全量由代码按打平规则做，不调 LLM
 run:
   max_rounds: 6

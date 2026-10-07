@@ -23,7 +23,9 @@ def load(name: str) -> dict:
             files[n] = p.read_text()
     files["events.json"] = json.dumps(rec["events"], ensure_ascii=False, indent=1)
     meta = {"id": f"ex-{name}", "title": f"示例 · {name}", "status": "done", "example": True,
-            "provider": rec["meta"].get("llm", ""), "busy": False, "settings": {}, "note": None}
+            "provider": rec["meta"].get("llm", ""), "busy": False, "settings": {}, "note": None,
+            "langfuse_url": rec["meta"].get("langfuse_url")}               # 录制时公开的 trace（导出时写进 meta）
     return {"meta": meta, "events": rec["events"], "records": rec["records"], "trials": rec.get("trials") or {},
-            "intake": None, "data": {"csv_name": rec["meta"].get("dataset", ""), "description": rec.get("note", "")},
+            "intake": rec.get("intake"),                                   # 从工作台导出的示例带着接入过程
+            "data": {"csv_name": rec["meta"].get("dataset", ""), "description": rec.get("description") or rec.get("note", "")},
             "files": files}

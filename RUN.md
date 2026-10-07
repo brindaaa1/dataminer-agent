@@ -54,35 +54,15 @@ python -m eval.run_task --dataset lending_club --task-id demo2 --llm anthropic -
 python -m eval.run_task --dataset lending_club --task-id demo3 --llm kimi      --full-trials 15 --max-rounds 5
 ```
 
-模型卡（含 Mermaid 实验树）写在 `reports/model_card_<task-id>.md`；对已完成的任务重新生成报告：
+模型卡（含 Mermaid 实验树）写在 `reports/model_card_<task-id>.md`。
+
+## 6. 核心实验
+
+泄漏检查消融、多表特征工厂、单调约束、跨任务 Memory、中断恢复等实验的结果保存在 `examples/`；产生它们的一次性脚本已移除，可从 git 历史找回。agent 本身的评测（固定数据集、A/A 噪声带、回归对比、情景用例）见 `eval/suite/` 和 `docs/eval/JOURNAL.md`：
 
 ```bash
-python -m eval.make_report --task-id demo1
+caffeinate -i python -m eval.suite.run --tier fast --label v14 --jobs 4     # macOS 上用 caffeinate 防止睡眠中断
 ```
-
-## 6. 核心实验的复现命令
-
-```bash
-# B0 / B1 基线对比
-python -m eval.run_baselines --dataset lending_club --agent-exp demo1_e03 --agent-task demo1
-
-# 泄漏注入演示：把泄漏字段放回数据、不告诉 agent，对比 guardrail 开/关
-python -m eval.a3_leak_demo --dataset hotel_bookings --clean-task demo1 --include-suspects
-
-# 多表特征工厂 vs 原始宽表
-python -m eval.hc_feature_eval --trials 20 --per-template
-
-# 单调约束 开 vs 关
-python -m eval.a6_monotone --trials 15
-
-# 跨任务 Memory（小样本，几分钟）
-python -m eval.memory_demo
-
-# 训练中途 kill -9，同一条命令恢复
-python -m eval.resume_demo
-```
-
-这些脚本预先跑好的结果在 `examples/` 里，不需要真的下载数据也能看懂发生了什么。
 
 ## 7. 进度可视化（可选）
 
@@ -100,7 +80,7 @@ optuna-dashboard sqlite:///artifacts/optuna.db
     cd web && npm install && npm run build && cd ..
     uvicorn server.app:app --port 8000          # 打开 http://127.0.0.1:8000
 
-- 不填 key：LLM 选 mock，上传 `data_sample/hotel_bookings/` 下的 CSV 和业务说明即可走完整流程（mock 的接入起草直接给出 hotel 的手写配置）。
+- 不填 key：LLM 选 mock，上传 `data_sample/electricity/` 或 `data_sample/hotel_bookings/` 下的 CSV 和业务说明即可走完整流程（mock 的接入起草直接给出录制好的配置：电价用一次 DeepSeek 确认过的草稿，酒店用手写配置）。
 - 用真实模型：在 `.env` 里配好对应 provider 的 key，界面上选 provider。
 - 左侧任务栏的"示例"是录制的真实运行，只读，不需要 key。
 - 每个任务的数据、配置、事件和产出都在 `workspace/tasks/<任务 id>/`；跨任务经验库在 `workspace/memory.db`。

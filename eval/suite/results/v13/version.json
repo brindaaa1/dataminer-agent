@@ -1,0 +1,474 @@
+{
+ "label": "v13",
+ "tier": "fast",
+ "status": "done",
+ "jobs": 4,
+ "settings": {
+  "max_rounds": 6,
+  "low_sample_frac": 0.3,
+  "low_trials": 10,
+  "full_trials": 20,
+  "split_seed": 42,
+  "autonomy": "L0",
+  "llm": "deepseek",
+  "scenario": {
+   "max_rounds": 5,
+   "n_rows": 20000,
+   "seed": 0
+  }
+ },
+ "git": {
+  "sha": "0a192e583a3bad9264bb70592c0a68b1426bd900",
+  "dirty": true
+ },
+ "started": 1791365459.669158,
+ "finished": 1791366522.954304,
+ "wall_sec": 2854.4,
+ "cost_usd": 0.0284374496,
+ "datasets": {
+  "lending_club": {
+   "baselines": {
+    "b0": {
+     "name": "b0_v11_lending_club",
+     "oot_dev_auc": 0.6410340843621717,
+     "oot_dev_ks": 0.2086977425847883,
+     "holdout_auc": 0.6473875093262106,
+     "wall_sec": 0.13272690773010254,
+     "n_features": 35,
+     "best_iter": 32
+    },
+    "b1": {
+     "name": "b1_v11_lending_club",
+     "oot_dev_auc": 0.6563643175243155,
+     "oot_dev_ks": 0.24250058488934517,
+     "holdout_auc": 0.6607395706920625,
+     "wall_sec": 299.9676547050476,
+     "n_features": 35,
+     "best_estimator": "xgb_limitdepth",
+     "time_budget": 300.0,
+     "best_config": {
+      "n_estimators": 62,
+      "max_depth": 3,
+      "min_child_weight": 4.421383643775243,
+      "learning_rate": 0.10997646593584612,
+      "subsample": 0.9194497119239703,
+      "colsample_bylevel": 0.8383060252800126,
+      "colsample_bytree": 0.9315104535926236,
+      "reg_alpha": 0.00467401466797316,
+      "reg_lambda": 5.399536139724092
+     }
+    }
+   },
+   "runs": [
+    {
+     "seed": 1,
+     "status": "ok",
+     "error": null,
+     "final_model": "catboost",
+     "holdout": 0.6644250242823481,
+     "oot_dev": 0.6564885614195651,
+     "overfit": false,
+     "stop_reason": "NO_PROGRESS",
+     "n_rounds": 4,
+     "wall_sec": 420.0,
+     "cost_usd": 0.005065144000000001,
+     "task_id": "v13_lending_club_s1",
+     "process": {
+      "rounds": {
+       "value": 4,
+       "max": 6,
+       "stop_reason": "NO_PROGRESS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.0,
+       "n": 0,
+       "evidence": []
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": null,
+       "worth": [],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": null,
+       "evidence": []
+      },
+      "final_lineage": {
+       "value": "赛跑 catboost → 升全量",
+       "evidence": [
+        "v13_lending_club_s1_race_catboost",
+        "v13_lending_club_s1_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 3,
+       "kept": 3,
+       "promising": 0,
+       "promoted": 0,
+       "accepted": 0,
+       "evidence": [
+        "v13_lending_club_s1_e02",
+        "v13_lending_club_s1_e03",
+        "v13_lending_club_s1_e04"
+       ]
+      },
+      "recovery": {
+       "value": null,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 4,
+       "last_alpha": 0.02095298920982026,
+       "mde": 0.0099,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.005065144000000001,
+       "wall_sec": 420.0,
+       "tokens": 27818,
+       "sec_per_round": 105.0,
+       "evidence": []
+      }
+     }
+    },
+    {
+     "seed": 0,
+     "status": "ok",
+     "error": null,
+     "final_model": "catboost",
+     "holdout": 0.6652244680479144,
+     "oot_dev": 0.6564722772756834,
+     "overfit": false,
+     "stop_reason": "NO_PROGRESS",
+     "n_rounds": 4,
+     "wall_sec": 423.1,
+     "cost_usd": 0.005397784000000001,
+     "task_id": "v13_lending_club_s0",
+     "process": {
+      "rounds": {
+       "value": 4,
+       "max": 6,
+       "stop_reason": "NO_PROGRESS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.0,
+       "n": 0,
+       "evidence": []
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": null,
+       "worth": [],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": null,
+       "evidence": []
+      },
+      "final_lineage": {
+       "value": "赛跑 catboost → 升全量",
+       "evidence": [
+        "v13_lending_club_s0_race_catboost",
+        "v13_lending_club_s0_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 2,
+       "kept": 2,
+       "promising": 0,
+       "promoted": 0,
+       "accepted": 0,
+       "evidence": [
+        "v13_lending_club_s0_e02",
+        "v13_lending_club_s0_e04"
+       ]
+      },
+      "recovery": {
+       "value": null,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 4,
+       "last_alpha": 0.02095298920982026,
+       "mde": 0.0099,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.005397784000000001,
+       "wall_sec": 423.1,
+       "tokens": 29044,
+       "sec_per_round": 105.8,
+       "evidence": []
+      }
+     }
+    }
+   ],
+   "summary": {
+    "n": 2,
+    "n_ok": 2,
+    "holdout_mean": 0.6648247461651312,
+    "delta_b1_mean": 0.004085175473068747,
+    "rounds_mean": 4.0,
+    "fe_in_final": "0/2",
+    "wall_sec": 843.1,
+    "cost_usd": 0.010462928000000002,
+    "worst_task": "v13_lending_club_s1"
+   }
+  },
+  "hotel_bookings": {
+   "baselines": {
+    "b0": {
+     "name": "b0_v11_hotel_bookings",
+     "oot_dev_auc": 0.8194713660749873,
+     "oot_dev_ks": 0.48655786389548844,
+     "holdout_auc": 0.7760766872707171,
+     "wall_sec": 0.344404935836792,
+     "n_features": 27,
+     "best_iter": 309
+    },
+    "b1": {
+     "name": "b1_v11_hotel_bookings",
+     "oot_dev_auc": 0.8229564935197918,
+     "oot_dev_ks": 0.48485142073067944,
+     "holdout_auc": 0.7766251660437448,
+     "wall_sec": 300.46052503585815,
+     "n_features": 27,
+     "best_estimator": "extra_tree",
+     "time_budget": 300.0,
+     "best_config": {
+      "n_estimators": 51,
+      "max_features": 0.4368445238771565,
+      "max_leaves": 1950,
+      "criterion": "entropy"
+     }
+    }
+   },
+   "runs": [
+    {
+     "seed": 0,
+     "status": "ok",
+     "error": null,
+     "final_model": "catboost",
+     "holdout": 0.7947521926024933,
+     "oot_dev": 0.8296737919811462,
+     "overfit": false,
+     "stop_reason": "NO_PROGRESS",
+     "n_rounds": 5,
+     "wall_sec": 951.8,
+     "cost_usd": 0.0093077096,
+     "task_id": "v13_hotel_bookings_s0",
+     "process": {
+      "rounds": {
+       "value": 5,
+       "max": 6,
+       "stop_reason": "NO_PROGRESS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.0,
+       "n": 0,
+       "evidence": []
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": null,
+       "worth": [],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": null,
+       "evidence": []
+      },
+      "final_lineage": {
+       "value": "赛跑 catboost → 升全量",
+       "evidence": [
+        "v13_hotel_bookings_s0_race_catboost",
+        "v13_hotel_bookings_s0_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 2,
+       "kept": 2,
+       "promising": 0,
+       "promoted": 0,
+       "accepted": 0,
+       "evidence": [
+        "v13_hotel_bookings_s0_e04",
+        "v13_hotel_bookings_s0_e05"
+       ]
+      },
+      "recovery": {
+       "value": null,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 4,
+       "last_alpha": 0.02095298920982026,
+       "mde": 0.0083,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.0093077096,
+       "wall_sec": 951.8,
+       "tokens": 45524,
+       "sec_per_round": 190.4,
+       "evidence": []
+      }
+     }
+    },
+    {
+     "seed": 1,
+     "status": "ok",
+     "error": null,
+     "final_model": "catboost",
+     "holdout": 0.7949683213661828,
+     "oot_dev": 0.8321656603546836,
+     "overfit": false,
+     "stop_reason": "MAX_ROUNDS",
+     "n_rounds": 6,
+     "wall_sec": 1059.5,
+     "cost_usd": 0.008666812,
+     "task_id": "v13_hotel_bookings_s1",
+     "process": {
+      "rounds": {
+       "value": 6,
+       "max": 6,
+       "stop_reason": "MAX_ROUNDS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.0,
+       "n": 0,
+       "evidence": []
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": null,
+       "worth": [],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": null,
+       "evidence": []
+      },
+      "final_lineage": {
+       "value": "赛跑 catboost → 升全量",
+       "evidence": [
+        "v13_hotel_bookings_s1_race_catboost",
+        "v13_hotel_bookings_s1_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 0,
+       "kept": 0,
+       "promising": 0,
+       "promoted": 0,
+       "accepted": 0,
+       "evidence": []
+      },
+      "recovery": {
+       "value": 1.0,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 4,
+       "last_alpha": 0.02095298920982026,
+       "mde": 0.0083,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.008666812,
+       "wall_sec": 1059.5,
+       "tokens": 46695,
+       "sec_per_round": 176.6,
+       "evidence": []
+      }
+     }
+    }
+   ],
+   "summary": {
+    "n": 2,
+    "n_ok": 2,
+    "holdout_mean": 0.794860256984338,
+    "delta_b1_mean": 0.01823509094059328,
+    "rounds_mean": 5.5,
+    "fe_in_final": "0/2",
+    "wall_sec": 2011.3,
+    "cost_usd": 0.0179745216,
+    "worst_task": "v13_hotel_bookings_s0"
+   }
+  }
+ },
+ "scenarios": []
+}

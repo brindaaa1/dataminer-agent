@@ -11,6 +11,7 @@ artifacts_*/
 reports/
 # 例外：示例任务的模型卡与实验树（代码生成，随仓库分发）
 !examples/traces/reports/
+!tests/fixtures/reports/
 workspace/
 .superpowers/
 

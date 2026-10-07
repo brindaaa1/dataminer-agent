@@ -276,11 +276,10 @@ STOP = {"action": "STOP", "params": {"reason": "x"}, "hypothesis": "h", "expecte
 
 
 def _raced(cfg, plan, task_id, keep_models=False, **spec_kw):
-    """keep_models=False：赛跑名单放开到全部模型，只测 LLM 提名与约束的交集。"""
+    """keep_models=False：核心模型只留 lgbm，方便看 LLM 追加了哪些。"""
     from agent.llm import last_json_block
-    from modeling.zoo import ZOO
     if not keep_models:
-        cfg["race"]["models"] = list(ZOO)
+        cfg["race"]["models"] = ["lgbm"]
 
     def llm(user):
         ctx = last_json_block(user)
@@ -291,7 +290,7 @@ def _raced(cfg, plan, task_id, keep_models=False, **spec_kw):
     return o, {r.config["model"] for r in o.store.all(task_id) if r.action_type == "RACE"}
 
 
-def test_race_only_runs_llm_candidates(toy_cfg):
+def test_race_runs_core_plus_llm_candidates(toy_cfg):
     from modeling.zoo import ZOO
 
     def plan(ctx):
@@ -299,21 +298,22 @@ def test_race_only_runs_llm_candidates(toy_cfg):
         return {"directions": [], "candidate_models": [{"model": "lr_scorecard", "reason": "r"},
                                                        {"model": "random_forest", "reason": "r"}]}
     o, raced = _raced(toy_cfg, plan, "c1")
-    assert raced == {"lr_scorecard", "random_forest"}
+    assert raced == {"lgbm", "lr_scorecard", "random_forest"}              # 核心 lgbm 必跑，LLM 追加两个
     assert o.events.query("plan_candidates")
 
 
 def test_candidates_intersect_with_constraints(toy_cfg):
+    """约束禁掉了核心模型 lgbm：核心为空时用约束允许的全部模型（与高可解释性只剩评分卡同一规则）。"""
     plan = lambda ctx: {"directions": [], "candidate_models": [{"model": "lgbm", "reason": "r"},
                                                                {"model": "random_forest", "reason": "r"}]}
-    _, raced = _raced(toy_cfg, plan, "c2", constraints={"banned_models": ["lgbm"]})
-    assert raced == {"random_forest"}
-
-
-def test_no_candidates_races_all_allowed(toy_cfg):
     from modeling.zoo import ZOO
+    _, raced = _raced(toy_cfg, plan, "c2", constraints={"banned_models": ["lgbm"]})
+    assert raced == set(ZOO) - {"lgbm"}
+
+
+def test_no_candidates_races_the_core(toy_cfg):
     _, raced = _raced(toy_cfg, lambda ctx: {"directions": []}, "c3")
-    assert raced == set(ZOO)
+    assert raced == {"lgbm"}
 
 
 def test_decide_context_keeps_templates_and_model_profiles(toy_cfg):
@@ -348,7 +348,7 @@ def test_duplicate_candidates_race_once(toy_cfg):
     plan = lambda ctx: {"directions": [], "candidate_models": [{"model": "lr_scorecard", "reason": "r"},
                                                                {"model": "lr_scorecard", "reason": "r"}]}
     o, _ = _raced(toy_cfg, plan, "d1")
-    assert o.p["race"] == ["d1_race_lr_scorecard"] and len(o.events.query("evaluated")) == 1
+    assert o.p["race"] == ["d1_race_lgbm", "d1_race_lr_scorecard"] and len(o.events.query("evaluated")) == 2
 
 
 def test_metric_locked_from_checkpoint_on_resume(toy_cfg):
@@ -394,6 +394,7 @@ def _promote_then(after, toy_cfg, task):
         if state["n"] == 1:
             return promote(next(r["exp_id"] for r in ctx["race"] if r["model"] == "lgbm"))
         return after(ctx)
+    toy_cfg["race"]["rule_first_promotion"] = False                      # 第一次升全量由脚本指定（lgbm）
     return build(toy_cfg, ScriptedLLM(script), task=task, autonomy="L0")
 
 
@@ -500,13 +501,41 @@ def test_first_promotion_follows_race_tie_without_llm(toy_cfg):
     assert not any(e["type"] == "llm_call" and e["payload"].get("stage") == "DECIDE" for e in ev if e["id"] < first_dec["id"])
 
 
-def test_race_is_limited_to_configured_models(toy_cfg):
-    """v7–v10：随机森林每次赛跑 30–44 秒，20 次运行几乎没赢过。赛跑默认只在 race.models 里选；约束只允许别的模型（如高可解释性只能评分卡）时照旧。"""
-    toy_cfg["race"]["models"] = ["lgbm", "catboost"]
-    plan = lambda ctx: {"directions": [], "candidate_models": [{"model": "lgbm", "reason": "r"}, {"model": "random_forest", "reason": "r"}]}
+def test_core_models_always_race_and_llm_can_only_add(toy_cfg):
+    """赛跑是低成本的小样本比较：race.models 里的核心模型都要跑，LLM 只能追加、不能砍掉（Elec2 测试：LLM 只提名 lgbm，catboost 没参赛）。
+    追加最多 race.max_extra 个；约束只允许别的模型（如高可解释性只能评分卡）时照旧。"""
+    toy_cfg["race"]["models"], toy_cfg["race"]["max_extra"] = ["lgbm", "catboost"], 1
+    plan = lambda ctx: {"directions": [], "candidate_models": [{"model": "lgbm", "reason": "r"}, {"model": "random_forest", "reason": "r"},
+                                                               {"model": "lr_scorecard", "reason": "r"}]}
     _, raced = _raced(toy_cfg, plan, "rm1", keep_models=True)
-    assert raced == {"lgbm"}
+    assert raced == {"lgbm", "catboost", "random_forest"}
     _, raced = _raced(toy_cfg, lambda ctx: {"directions": []}, "rm2", keep_models=True)
     assert raced == {"lgbm", "catboost"}
     _, raced = _raced(toy_cfg, lambda ctx: {"directions": []}, "rm3", keep_models=True, constraints={"interpretability": "high"})
     assert raced == {"lr_scorecard"}
+
+
+def test_plan_context_carries_the_domain(toy_cfg):
+    seen = {}
+
+    def llm(user):
+        from agent.llm import last_json_block
+        ctx = last_json_block(user)
+        if ctx.get("mode") == "PLAN":
+            seen["plan"] = ctx
+            return {"directions": []}
+        return STOP
+    toy_cfg["race"]["rule_first_promotion"] = False
+    Orchestrator(toy_spec(toy_cfg, autonomy="L0"), toy_cfg, ScriptedLLM(llm), None, "dom").run()
+    assert "domain" in seen["plan"]
+
+
+def test_decision_has_a_user_note_and_rule_promotion_writes_one(toy_cfg):
+    from agent.schemas import Decision
+    d = Decision.model_validate(dict(action="STOP", params={"reason": "x"}, hypothesis="h", expected_gain="g", est_cost={}, rationale="r"))
+    assert d.user_note == ""
+    toy_cfg["evaluator"]["overfit_gap"] = {"mode": "relative", "tolerance": 0.05}
+    o = build(toy_cfg, PolicyMockLLM())
+    o.run()
+    first = next(e for e in o.events.query("decision"))
+    assert first["payload"]["by"] == "rule" and first["payload"]["decision"]["user_note"]

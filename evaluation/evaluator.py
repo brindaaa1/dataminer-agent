@@ -30,7 +30,7 @@ def scan_features(df, features, kh, cfg, dataset: str | None = None, extra_known
     fields, _, _ = field_table(kh, d.get("label", {}).get("source_table"), spec.get("derived_expr_overrides"))
     unregistered_ok = spec.get("unregistered_columns") == "application"      # 主表未登记字段的默认口径（与切分一致）
     pats = [re.compile(p, re.I) for p in ((kh["blacklist"] or {}).get("leakage_patterns", []))]
-    bad_av = ("unknown", "post_origination", "post_outcome", "at_checkin", "updated_until_event")
+    bad_av = ("unknown", "post_origination", "post_outcome", "before_outcome", "updated_until_event")
 
     def unavailable(f):
         if f in always_suspect:                # run_code 产出：不管数据集策略如何，一律视为可得时间不可信
@@ -41,7 +41,9 @@ def scan_features(df, features, kh, cfg, dataset: str | None = None, extra_known
             return not unregistered_ok
         return fields[f].get("availability") in bad_av
     return {
-        "feature_aucs": {f: single_feature_auc(df[f], df["_label"]) for f in features if f in df},
+        # 历史值特征（上一条的结果等）单独就可能很强，但由代码按时间生成、结构上不会泄漏：不按单特征 AUC 判泄漏
+        "feature_aucs": {f: single_feature_auc(df[f], df["_label"]) for f in features
+                         if f in df and fields.get(f, {}).get("availability") != "history"},
         "unavailable_fields": [f for f in features if unavailable(f)],
         "leak_pattern_hits": [f for f in features if any(p.search(f) for p in pats)],
     }
@@ -77,17 +79,14 @@ class Evaluator:
                         model=cand["model"], reference_gap=self.reference_gap, n_raw_features=self.n_raw_features)
         codes = diag["codes"]
         fails = []
-        if self.cfg.get("ablation", {}).get("no_guardrail"):     # A3：去掉 guardrail，只留 compare
-            pass
-        elif "OVERFIT_GAP" in codes:
+        if "OVERFIT_GAP" in codes:
             fails.append("OVERFIT_GAP")
-        if not self.cfg.get("ablation", {}).get("no_guardrail"):
-            if "LEAK_SUSPECT" in codes:
-                fails.append("LEAK_SUSPECT")
-            if "TOO_MANY_FEATURES" in diag["details"]:
-                fails.append("TOO_MANY_FEATURES")
-            if cand["metrics"].get("score_psi", 0) > c["psi_severe"]:
-                fails.append("SCORE_PSI")
+        if "LEAK_SUSPECT" in codes:
+            fails.append("LEAK_SUSPECT")
+        if "TOO_MANY_FEATURES" in diag["details"]:
+            fails.append("TOO_MANY_FEATURES")
+        if cand["metrics"].get("score_psi", 0) > c["psi_severe"]:
+            fails.append("SCORE_PSI")
         out = {"diagnosis_codes": codes, "diagnosis_details": diag["details"], "guardrail_failures": fails,
                "llm_claimed_verdict_ignored": llm_claimed_verdict, "compare": None, "oot_used": self.budget.used}
 

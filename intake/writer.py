@@ -11,14 +11,15 @@ def write(d: IntakeDraft, dataset_id: str, csv_path: str, out_dir: str) -> dict:
     root = Path(out_dir) / "knowhow"
     kd = root / dataset_id
     kd.mkdir(parents=True, exist_ok=True)
-    dic = {"dataset": dataset_id,
+    dic = {"dataset": dataset_id, "domain": d.domain,
            # 按取值打标签（与 Lending Club 的写法相同）：正类取值由用户确认，切分时真正用到
            "label": {"source_col": d.label.col, "definition": d.label.definition,
                      "positive": [str(d.label.positive)], "negative": [str(d.label.negative)]},
            "observation_time_col": d.observation_time_expr,
            "suggested_split": d.windows.model_dump(),
-           "fields": {k: {"availability": f.availability, "type": f.type, **({"note": f.reason} if f.reason else {})}
-                      for k, f in d.fields.items()}}
+           "fields": {k: {"availability": f.availability, "type": f.type, **({"note": f.reason} if f.reason else {}),
+                          **({"history": f.history.model_dump()} if f.history else {})} for k, f in d.fields.items()},
+           **({"history_by": d.history_by} if d.history_by else {})}
     bl = {"leakage": {"action": "drop_at_load", "fields": d.leakage},
           "unknown_availability": {"policy": "quarantine", "fields": d.quarantine},
           "meta": {"action": "drop_at_load", "fields": [k for k, f in d.fields.items() if f.availability == "meta"]}}   # 不是特征（如只用于切分的年份）

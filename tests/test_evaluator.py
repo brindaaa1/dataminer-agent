@@ -165,15 +165,6 @@ def test_only_evaluator_creates_accept():
                 assert not (isinstance(node, ast.Attribute) and node.attr == "ACCEPT"), f
 
 
-def test_no_guardrail_ablation_lets_leaky_candidate_through(ev):
-    e, mk = ev
-    e.cfg = {**e.cfg, "ablation": {"no_guardrail": True}}
-    base = mk("base")
-    leak = {"feature_aucs": {"x": .99}}
-    out = e.evaluate(mk("good", valid_auc=.8, oot_dev_auc=.7, gap=.1), base, leak)
-    assert out["guardrail_failures"] == [] and out["verdict"] == Verdict.ACCEPT      # A3：没有 guardrail，虚高的实验被接受
-
-
 def test_single_feature_auc_and_iv_accept_datetime_columns():
     from features.screen import iv
     y = pd.Series(np.r_[np.zeros(300), np.ones(300)].astype(int))
@@ -250,3 +241,14 @@ def test_cost_estimate_is_calibrated_on_this_tasks_race():
     assert estimate_cost_minutes(72000, 122, 20, cfg, "catboost", obs=obs) == pytest.approx(4.0 * 72000 / 21600 * 2)
     assert estimate_cost_minutes(21600, 142, 10, cfg, "catboost", obs=obs) == pytest.approx(4.0 * 142 / 122)
     assert estimate_cost_minutes(72000, 122, 20, cfg, "catboost") > 1000              # 没有实测时仍用静态公式
+
+
+def test_report_metrics_lift_recall_and_brier():
+    """补充参考指标（只报告，不参与选模型和护栏）：头部 10% 提升度和召回、Brier。"""
+    import numpy as np
+    from evaluation.metrics import report_metrics
+    y = np.array([1] * 10 + [0] * 90)
+    perfect = np.linspace(1, 0, 100)                      # 正类全排在最前
+    m = report_metrics(y, perfect)
+    assert m["lift_top10"] == pytest.approx(10.0) and m["recall_top10"] == pytest.approx(1.0)
+    assert report_metrics(y, np.full(100, 0.1))["brier"] == pytest.approx(0.09)

@@ -110,7 +110,7 @@ def compare(new: dict, old: dict, noise: dict | None = None) -> dict:
             table.append({"dataset": ds, "metric": m, "delta": round(mean, 4), "new": round(sum(x for _, x, _, _ in ds_) / len(ds_), 4),
                           "old": round(sum(y for _, _, y, _ in ds_) / len(ds_), 4), "n": len(ds_), "verdict": verdict,
                           "worst_task": worst.get("task_id")})
-        keys = ("wall_sec", "cost_usd") if new.get("jobs", 1) == old.get("jobs", 1) == 1 else ("cost_usd",)   # 并行跑时用时不可比
+        keys = ("wall_sec", "cost_usd") if new.get("jobs", 1) == old.get("jobs", 1) else ("cost_usd",)   # 并行数不同时用时不可比
         for key in keys if pairs else ():       # 旧版本没跑这个数据集：没有可比的用时花费
             n_, o_ = sum(p[1].get(key) or 0 for p in pairs), sum(p[2].get(key) or 0 for p in pairs)
             cost.append({"dataset": ds, "key": key, "new": round(n_, 4), "old": round(o_, 4), "ratio": round(n_ / o_, 2) if o_ else None,

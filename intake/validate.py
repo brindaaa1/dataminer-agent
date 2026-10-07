@@ -5,6 +5,7 @@ import json
 import duckdb
 from pydantic import BaseModel
 
+from data.knowhow import domains, load_config
 from intake.schemas import REQUIRED, IntakeDraft, Question
 
 CONFIRM = {"label": "标签列、正类取值和业务定义是否正确？",
@@ -33,9 +34,12 @@ def validate(d: IntakeDraft, csv_path: str) -> list[str]:
     errs = [f"{k} 未给出" for k in (*REQUIRED, "split_time_expr") if getattr(d, k) is None]
     if errs:
         return errs
+    names = {x["name"] for x in domains(load_config())}
+    if d.domain not in names:
+        errs.append(f"domain {d.domain} 不是可选的领域，只能取 {sorted(names)} 之一")
     con = _con(csv_path, d.csv_null_values)
     cols = {r[0] for r in con.execute("DESCRIBE raw").fetchall()}
-    errs += [f"字段 {c} 不在表头中" for c in (d.label.col, *d.fields, *d.leakage, *d.quarantine) if c not in cols]
+    errs += [f"字段 {c} 不在表头中" for c in (d.label.col, *d.fields, *d.leakage, *d.quarantine, *([d.history_by] if d.history_by else [])) if c not in cols]
     for k in ("observation_time_expr", "split_time_expr"):
         try:
             r = _ratio(con, getattr(d, k))

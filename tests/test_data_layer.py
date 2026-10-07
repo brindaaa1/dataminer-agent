@@ -165,16 +165,6 @@ def test_agent_code_cannot_reach_final_gate():
 
 
 # ---------- A3：泄漏字段放回 ----------
-def test_leak_back_puts_leakage_fields_back_but_not_label_source(toy):
-    cfg, df = toy
-    kh = load_knowhow("toy", cfg)
-    p = column_policy("toy", list(df.columns), kh, leak_back=True)
-    assert {"total_pymnt", "hardship_x"} <= set(p["keep"]) or {"total_pymnt", "hardship_x"} <= set(p["quarantine"]) | set(p["keep"])
-    assert "total_pymnt" in p["leak_truth"] and "loan_status" not in p["leak_truth"]
-    assert "loan_status" not in p["keep"]                  # label 来源永远不作为特征
-    assert "total_pymnt" not in column_policy("toy", list(df.columns), kh)["keep"]   # 默认仍然剔除
-
-
 # ---------- classic_derived：可得时间继承（§4.11） ----------
 def test_derive_availability_takes_weakest_input():
     from data.knowhow import derive_availability

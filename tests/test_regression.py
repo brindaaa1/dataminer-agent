@@ -167,3 +167,10 @@ def test_parallel_runs_skip_wall_time_comparison():
     new["datasets"]["d"]["runs"][0]["wall_sec"] = 1000
     r = compare(new, old, NOISE)
     assert {c["key"] for c in r["cost"]} == {"cost_usd"} and not any(f["kind"] == "cost_up" for f in r["flags"])
+
+
+def test_wall_time_is_compared_when_both_ran_with_the_same_jobs():
+    """memory 评测：热启动和冷启动都用 --jobs 4 跑，并行数相同，用时可比。"""
+    new, old = ver("m1", [run(0, 0.70)]), ver("v13", [run(0, 0.70)])
+    new["jobs"] = old["jobs"] = 4
+    assert {c["key"] for c in compare(new, old, NOISE)["cost"]} == {"wall_sec", "cost_usd"}

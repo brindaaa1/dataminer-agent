@@ -1,17 +1,15 @@
-"""单调约束（§4.12）：方向来自 domain_priors.yaml 的 risk_direction / 模板的 monotone_prior，不是 LLM 临场生成。
+"""单调约束（§4.12）：方向来自 knowhow/<数据集>/priors.yaml 的 target_direction / 模板的 monotone_prior，不是 LLM 临场生成。
 只给"有先验且方向明确"的数值特征加约束；先验与数据明显相反的特征跳过并写进报告（数据一致性守卫）。"""
-from pathlib import Path
 
 import pandas as pd
-import yaml
 
+from data.knowhow import target_direction
 from features.registry import Registry
 
 
 def priors_for(dataset: str, cfg: dict, config: dict) -> dict:
-    """{特征名: 风险方向 ±1/0}。优先级：模板 agg 上的 prior > domain_priors（含别名）。"""
-    pp = Path(cfg["paths"]["knowhow_root"]) / "domain_priors.yaml"
-    base = (yaml.safe_load(open(pp)).get("risk_direction", {}).get(dataset, {})) if pp.exists() else {}
+    """{特征名: 目标方向 ±1/0}。优先级：模板 agg 上的 prior > 数据集的 priors.yaml（含别名）。"""
+    base = target_direction(dataset, cfg)
     alias = cfg["task_specs"].get(dataset, {}).get("prior_aliases", {})          # 预处理后名字对不上先验时的映射
     out = {f: base[a] for f, a in alias.items() if a in base}
     out.update({k: v for k, v in base.items() if isinstance(v, int)})

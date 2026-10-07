@@ -4,18 +4,20 @@ import { api, type Snapshot } from "@/api"
 import { Bubble } from "@/components/Bubble"
 import { ErrorText } from "@/components/ErrorText"
 import { Button } from "@/components/ui/button"
+import { useDev } from "@/useDev"
 
 export function ChatRun({ snap }: { snap: Snapshot }) {
   const qc = useQueryClient()
   const refresh = () => { qc.invalidateQueries({ queryKey: ["task", snap.id] }); qc.invalidateQueries({ queryKey: ["tasks"] }) }
   const stop = useMutation({ mutationFn: () => api.stop(snap.id), onSuccess: refresh })
   const resume = useMutation({ mutationFn: () => api.resume(snap.id), onSuccess: refresh })
+  const dev = useDev()
   const r = snap.run
   if (!r && snap.status !== "running") return null
   return (
     <>
       <Bubble from="system">开始建模{r?.max_rounds ? `（最多 ${r.max_rounds} 轮）` : ""}</Bubble>
-      {r?.narration.map((n) => (
+      {(dev ? r?.narration : r?.brief)?.map((n) => (
         <Bubble key={n.key} tone={n.tone}>
           {n.tone === "running" && <Loader2 className="mr-1 inline size-3 animate-spin" />}{n.text}
         </Bubble>

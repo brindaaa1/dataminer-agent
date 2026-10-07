@@ -31,6 +31,7 @@ class Decision(BaseModel):
     est_cost: EstCost
     alternatives_considered: list[str] = Field(default_factory=list)
     rationale: str
+    user_note: str = ""                           # 给业务人员看的一句话：这一步做什么、为什么（工作台用户视图显示）
 
 
 class Direction(BaseModel):

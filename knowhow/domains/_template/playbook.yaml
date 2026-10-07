@@ -1,0 +1,25 @@
+# 领域手册骨架：复制本目录为 domains/<领域名>/，按注释填写。没填的字段沿用 _default。
+# 接入新数据时，LLM 按业务说明和 match_keywords 推荐一个领域，用户在确认环节确认或修改。
+name: <领域名，与目录名相同，如 churn>
+title: <一句话标题，如 用户流失预测>
+description: <这个领域的预测对象、正类含义、典型数据形态，2-3 句>
+match_keywords: []             # 业务说明里出现这些词时优先推荐本领域，如 [流失, 留存, 续费, churn]
+
+target:
+  positive_meaning: <正类是什么，如 30 天内流失>
+  direction_note: <目标方向的含义：+1 = 值越大越可能是正类>
+
+metric:                        # 可选，不填用 _default
+  primary: auc                 # auc | pr_auc | ks
+  guards: {pr_auc: 0.02}
+  report: [auc, pr_auc]
+
+leakage_name_patterns: []      # 本领域典型的"结果发生后才有"字段名片段，追加到 _default 之后
+leakage_desc_keywords: []
+sanity_rules: []               # 本领域的业务合理性规则，追加到 _default 之后
+
+feature_concepts:              # 本领域值得挖的信息维度，规划时给 LLM 参考
+  - id: <概念 id>
+    concept: <要刻画什么>
+    direction: 0               # +1 / -1 / 0（无先验，不加单调约束）
+    rationale: <为什么有用，一句话>

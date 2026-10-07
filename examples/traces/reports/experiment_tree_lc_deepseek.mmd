@@ -1,0 +1,22 @@
+flowchart TD
+  ROOT((start))
+  n_lc_deepseek_race_lgbm["lc_deepseek_race_lgbm<br/>RACE [low]<br/>AUC 0.6366<br/>PROMISING"]:::promising
+  n_lc_deepseek_race_catboost["lc_deepseek_race_catboost<br/>RACE [low]<br/>AUC 0.6550<br/>PROMISING"]:::promising
+  n_lc_deepseek_e01["lc_deepseek_e01<br/>PROMOTE_FIDELITY [full]<br/>AUC 0.6558 (+0.0009)<br/>ACCEPT"]:::accept
+  n_lc_deepseek_e02["lc_deepseek_e02<br/>EXPAND_FEATURES [low]<br/>AUC 0.6515 (-0.0043)<br/>INCONCLUSIVE<br/>PLATEAU"]:::inconclusive
+  n_lc_deepseek_e03["lc_deepseek_e03<br/>EXPAND_FEATURES [low]<br/>AUC 0.6603 (+0.0045)<br/>PROMISING"]:::promising
+  n_lc_deepseek_e04["lc_deepseek_e04<br/>EXPAND_FEATURES [low]<br/>AUC 0.6581 (+0.0023)<br/>INCONCLUSIVE<br/>PLATEAU"]:::inconclusive
+  n_lc_deepseek_e05["lc_deepseek_e05<br/>TUNE [full]<br/>AUC 0.6572 (+0.0013)<br/>INCONCLUSIVE<br/>PLATEAU"]:::inconclusive
+  ROOT --> n_lc_deepseek_race_lgbm
+  ROOT --> n_lc_deepseek_race_catboost
+  n_lc_deepseek_race_catboost --> n_lc_deepseek_e01
+  n_lc_deepseek_e01 --> n_lc_deepseek_e02
+  n_lc_deepseek_e01 --> n_lc_deepseek_e03
+  n_lc_deepseek_e01 --> n_lc_deepseek_e04
+  n_lc_deepseek_e01 --> n_lc_deepseek_e05
+  classDef accept fill:#c8e6c9,stroke:#2e7d32
+  classDef reject fill:#ffcdd2,stroke:#c62828
+  classDef inconclusive fill:#fff9c4,stroke:#f9a825
+  classDef promising fill:#bbdefb,stroke:#1565c0
+  classDef none fill:#eeeeee,stroke:#757575
+  classDef accept_inv,reject_inv,inconclusive_inv,promising_inv,none_inv fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray:4 3

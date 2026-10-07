@@ -32,7 +32,7 @@ def run():
               ev(6, "final_gate", {"exp_id": "e06", "metric": "auc", "holdout_auc": 0.76}),
               ev(7, "await_human", {"reason": "spec_incomplete"}), ev(8, "spec_confirmed", {"key": "label_def"}),
               ev(9, "stop", {"reason": "MAX_ROUNDS"})]
-    events += [ev(20 + i, "recorded", {"verdict": r["verdict"]}, r["exp_id"]) for i, r in enumerate(records[1:])]
+    events += [ev(20 + i, "recorded", {"verdict": r["verdict"], "worth": r["exp_id"] == "e02"}, r["exp_id"]) for i, r in enumerate(records[1:])]
     events += [ev(40, "state_transition", {"from": "PLAN", "to": "DECIDE", "sec": 30.0})]
     return events, records
 
@@ -85,17 +85,16 @@ def test_last_round_candidate_is_unreachable_not_a_miss():
     情景运行只有 5 轮时很常见，还会混进 A/A 的噪声带。单独列为 unreachable，不进命中率的分母。"""
     events, records = run()
     records = records + [rec("e07", "EXPAND_FEATURES", "PROMISING", "low", "e06", {"template_id": "t3", "expand": {"kept": ["f3"]}})]
-    events = events + [ev(60, "recorded", {"verdict": "PROMISING"}, "e07")]
+    events = events + [ev(60, "recorded", {"verdict": "PROMISING", "worth": True}, "e07")]
     m = process_metrics(events, records, max_rounds=8)
     assert m["upgrade_hit_rate"]["worth"] == ["e02"] and m["upgrade_hit_rate"]["unreachable"] == ["e07"]
     assert m["upgrade_hit_rate"]["value"] == 1.0
 
 
-def test_worth_promoting_follows_agent_mark():
-    """agent 记下的标记（recorded.mark）为准：差太小（< 0.5×MDE）标成 INCONCLUSIVE 的，不算"值得升"，
-    和 agent 停止计数、升全量提示同一口径。旧运行没有 mark，仍按差 > 0。"""
+def test_worth_promoting_follows_agent_worth():
+    """"值得升"以 agent 记下的 worth 为准（低保真比最优高 ≥ MDE）：差距不够的不算，和 agent 的升全量规则同一口径。"""
     events, records = run()
-    events = [{**e, "payload": {**e["payload"], "mark": "INCONCLUSIVE"}} if e["type"] == "recorded" and e["exp_id"] == "e02" else e
+    events = [{**e, "payload": {**e["payload"], "worth": False}} if e["type"] == "recorded" and e["exp_id"] == "e02" else e
               for e in events]
     m = process_metrics(events, records, max_rounds=8)
     assert m["upgrade_hit_rate"]["worth"] == [] and m["fe_funnel"]["promising"] == 0

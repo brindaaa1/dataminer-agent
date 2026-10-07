@@ -1,0 +1,12 @@
+# 目标方向先验：+1 = 值越大越可能是正类；-1 = 越小越可能；0 = 无先验（不加单调约束）。
+# 单调约束和模型卡读这里；模板产出的特征方向继承模板 / 领域手册里的 direction。没列出的特征不加约束。
+# 新特征的方向可以由 LLM 提议，但要写出业务理由，并经过「加约束 vs 不加约束」的比较才保留。
+target_direction:
+  # 正类 = 订单被取消
+  lead_time: +1
+  previous_cancellations: +1
+  cancel_history_ratio: +1
+  previous_bookings_not_canceled: -1
+  is_repeated_guest: -1
+  total_nights: 0                  # 方向不明，不加约束
+  # deposit_type 等类别变量不加单调约束

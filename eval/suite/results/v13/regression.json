@@ -1,0 +1,128 @@
+{
+ "new": "v13",
+ "old": "v12",
+ "tier": "fast",
+ "noise_calibrated": true,
+ "table": [
+  {
+   "dataset": "lending_club",
+   "metric": "holdout",
+   "delta": 0.0032,
+   "new": 0.6648,
+   "old": 0.6616,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_lending_club_s1"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "delta_b1",
+   "delta": 0.0032,
+   "new": 0.0041,
+   "old": 0.0009,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_lending_club_s1"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "wasted_rate",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_lending_club_s1"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "rejected_decisions",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_lending_club_s1"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "fe_in_final",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_lending_club_s1"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "holdout",
+   "delta": 0.005,
+   "new": 0.7949,
+   "old": 0.7899,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_hotel_bookings_s1"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "delta_b1",
+   "delta": 0.005,
+   "new": 0.0182,
+   "old": 0.0132,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_hotel_bookings_s1"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "wasted_rate",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_hotel_bookings_s0"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "rejected_decisions",
+   "delta": -0.5,
+   "new": 0.0,
+   "old": 0.5,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_hotel_bookings_s0"
+  },
+  {
+   "dataset": "hotel_bookings",
+   "metric": "fe_in_final",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v13_hotel_bookings_s0"
+  }
+ ],
+ "flags": [],
+ "cost": [
+  {
+   "dataset": "lending_club",
+   "key": "cost_usd",
+   "new": 0.0105,
+   "old": 0.0104,
+   "ratio": 1.01,
+   "threshold": 1.3
+  },
+  {
+   "dataset": "hotel_bookings",
+   "key": "cost_usd",
+   "new": 0.018,
+   "old": 0.0146,
+   "ratio": 1.23,
+   "threshold": 1.68
+  }
+ ],
+ "conclusion": "无退步"
+}

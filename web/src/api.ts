@@ -5,27 +5,29 @@ export type Tone = "ok" | "bad" | "warn" | "neutral" | "running"
 export interface EvalInfo { label: string; tier: string; conclusion: string | null; running: boolean }
 export interface TaskSummary { id: string; title: string; status: Status; created_at: number | null; example: boolean; eval: EvalInfo | null }
 export interface Question { key: string; question: string; recommended: string; display: string; required: boolean }
-export interface FieldRow { name: string; type: string; availability: string; reason: string; group: "ok" | "leak" | "quarantine" | "meta" }
+export interface FieldRow { name: string; type: string; availability: string; reason: string; group: "ok" | "leak" | "quarantine" | "meta"; history: string | null }
 export type Windows = Record<"train_valid" | "oot_dev" | "holdout", [string, string]>
-export interface Draft { label: string | null; observation_time_expr: string | null; windows: Windows | null; metric: string | null; fields: FieldRow[]; confirmed: string[] }
+export interface Draft { label: string | null; observation_time_expr: string | null; windows: Windows | null; metric: string | null
+  domain: string | null; data_summary: string | null; fields: FieldRow[]; confirmed: string[] }
 export interface Intake { round: number; questions: Question[]; draft: Draft | null; changed: string[]; yaml: Record<string, string> }
 export interface Trial { n: number; value: number | null; state: string }
 export interface Evaluation { exp_id: string; model: string | null; fidelity: string | null; verdict: string | null; codes: string[]; oot_dev: number | null }
 export interface Round {
   key: string; title: string; action: string | null; action_label: string; verdict: string | null; codes: string[]
   metrics: { train: number | null; valid: number | null; oot_dev: number | null; oot_dev_ks: number | null; gap: number | null }
-  hypothesis: string | null; alternatives: string[]; stop_reason: string | null; evaluations: Evaluation[]
-  llm_calls: number; running: boolean; trials: Record<string, Trial[]>; by_rule: boolean
+  hypothesis: string | null; user_note: string | null; alternatives: string[]; stop_reason: string | null; evaluations: Evaluation[]
+  llm_calls: number; running: boolean; trials: Record<string, Trial[]>; by_rule: boolean; action_user: string
 }
 export interface Narration { key: string; text: string; tone: Tone }
 export interface Final {
   exp_id: string; model: string | null; oot_dev: number | null; holdout: number | null; holdout_ks: number | null
-  drop: number | null; overfit: boolean; n_experiments: number; n_accepted: number; risks: string[]
+  drop: number | null; overfit: boolean; n_experiments: number; n_accepted: number; lift_top10: number | null
+  risks: string[]; risks_user: string[]
 }
 export interface TreeNode { exp_id: string; parent: string | null; verdict: string; label: string }
 export interface Run {
   metric: string; max_rounds: number | null; rounds: Round[]; chart: { label: string; value: number; verdict: string | null }[]
-  narration: Narration[]; final: Final | null; tree: TreeNode[]
+  narration: Narration[]; brief: Narration[]; final: Final | null; tree: TreeNode[]
 }
 export interface Snapshot {
   id: string; title: string; status: Status; stage: Stage; example: boolean; eval_label: string | null; readonly: boolean; busy: boolean

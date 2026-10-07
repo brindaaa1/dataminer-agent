@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-DS3 = json.loads((ROOT / "examples" / "traces" / "hotel_deepseek3.json").read_text())
+DS3 = json.loads((ROOT / "tests" / "fixtures" / "hotel_deepseek3.json").read_text())
 
 
 def ev(i, t, p, x=None):
@@ -247,7 +247,7 @@ def test_version_json_and_latest_same_tier(tmp_path):
     assert v["wall_sec"] == 15 and v["cost_usd"] == pytest.approx(0.012) and set(v["git"]) == {"sha", "dirty"}
     for lab, tier, fin in (("v5", "fast", 1), ("v6", "fast", 2), ("v6b", "full", 3), ("v7", "fast", 4)):
         (tmp_path / lab).mkdir()
-        (tmp_path / lab / "version.json").write_text(json.dumps({"label": lab, "tier": tier, "finished": fin}))
+        (tmp_path / lab / "version.json").write_text(json.dumps({"label": lab, "tier": tier, "finished": fin, "status": "done"}))
     assert latest_version(tmp_path, "fast", before="v7")["label"] == "v6"
     assert latest_version(tmp_path, "nope", before="v7") is None
     assert v["status"] == "done" and build_version("v7", "fast", {}, [], {}, [], 1.0, status="running")["status"] == "running"
@@ -280,3 +280,18 @@ def test_parallel_jobs_split_the_threads(eval_env, monkeypatch):
     base = eval_env.build_cfg("hotel_sample", "t", 0)["inner_loop"]["n_threads"]
     monkeypatch.setenv("DATAMINER_EVAL_JOBS", "4")
     assert eval_env.build_cfg("hotel_sample", "t", 0)["inner_loop"]["n_threads"] == max(1, base // 4)
+
+
+def test_memory_from_another_seed_of_a_previous_version(eval_env, monkeypatch):
+    """memory 评测：每个种子开始前，拷一份指定版本里另一个种子跑完后的 memory 库（热启动 + 经验），再和那个版本的冷启动配对比。"""
+    for s in (0, 1):
+        d = eval_env.RUNS / "v13" / "hotel_sample" / f"s{s}"
+        d.mkdir(parents=True)
+        (d / f"memory_s{s}.db").write_text(f"from s{s}")
+    monkeypatch.setenv("DATAMINER_EVAL_MEMORY_FROM", "v13")
+    cfg = eval_env.build_cfg("hotel_sample", "m1", 1)
+    from pathlib import Path
+    assert Path(cfg["memory"]["db"]).read_text() == "from s0"                   # 种子 1 用种子 0 的经验
+    assert Path(eval_env.build_cfg("hotel_sample", "m1", 0)["memory"]["db"]).read_text() == "from s1"
+    base = eval_env.build_cfg("hotel_sample", "m1", 0, "baselines")                # 基线不拷
+    assert not Path(base["memory"]["db"]).exists()

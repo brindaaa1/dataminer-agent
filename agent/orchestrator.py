@@ -17,7 +17,7 @@ from agent.llm import TracedLLM, extract_json
 from agent.schemas import Decision, EstCost, Plan, TaskSpec
 from agent.states import State as S, TRANSITIONS, TERMINAL, legal
 from data.access import DataAccess
-from data.knowhow import load_knowhow
+from data.knowhow import domain_context, load_knowhow
 from evaluation.evaluator import Evaluator, scan_features
 from evaluation.metrics import primary
 from evaluation.oot_budget import OOTBudgetExhausted
@@ -270,16 +270,18 @@ class Orchestrator:
                 "max_cardinality": int(max((tr[c].nunique() for c in cats), default=0))}
         plan = Plan(directions=[])
         try:
-            ctx = {"mode": "PLAN", "spec": self.spec.model_dump(mode="json"), "data_profile": prof, "models": model_profiles(self.spec)}
+            ctx = {"mode": "PLAN", "spec": self.spec.model_dump(mode="json"), "data_profile": prof, "models": model_profiles(self.spec),
+                   "race_core": self._race_core(), "domain": domain_context(self.spec.dataset, self.cfg)}       # 领域手册（knowhow/domains/）
             plan = Plan.model_validate(self._llm_json(PLAN_SYSTEM, "```json\n" + json.dumps(ctx, ensure_ascii=False) + "\n```"))
             self.p["directions"] = [d.model_dump() for d in plan.directions]
         except (ValidationError, ValueError) as e:
             self.events.append("plan_invalid", {"error": str(e)[:200]})      # 规划失败不致命：没有方向也能靠 DECIDE 继续
-        # 模型赛跑（§4.12）：LLM 提名候选，代码按约束过滤后在同特征集、同预算、低保真下各跑一个 study；没提名则全部赛跑
-        allowed = allowed_models(self.spec)
-        # 赛跑名单限定在 race.models（v7–v10：随机森林每次 30–44 秒、几乎没赢过）；约束只允许别的模型时照旧用约束允许的
-        allowed = [m for m in allowed if m in self.cfg["race"]["models"]] or allowed
-        race_models = list(dict.fromkeys(c.model for c in plan.candidate_models if c.model in allowed)) or allowed
+        # 模型赛跑（§4.12）：同特征集、同预算、低保真下各跑一个 study。核心模型（race.models 里约束允许的）必跑，
+        # LLM 提名的其他模型最多追加 race.max_extra 个：赛跑是低成本的小样本比较，LLM 只能补充、不能砍掉候选
+        # （Elec2 测试：LLM 只提名 lgbm，catboost 没参赛）。约束只允许别的模型时（如高可解释性只剩评分卡）用约束允许的全部。
+        allowed, core = allowed_models(self.spec), self._race_core()
+        extra = [m for m in dict.fromkeys(c.model for c in plan.candidate_models) if m in allowed and m not in core]
+        race_models = core + extra[: self.cfg["race"]["max_extra"]]
         self.events.append("plan_candidates", {"candidates": [c.model_dump() for c in plan.candidate_models], "raced": race_models})
         for i, m in enumerate(race_models):
             exp_id = f"{self.task_id}_race_{m}"
@@ -318,6 +320,11 @@ class Orchestrator:
         self.p["code_inputs"] = [f for f in self.p["all_features"] if f not in bad]      # run_code 能看到的输入（预测时点可得）
         return S.DECIDE
 
+    def _race_core(self) -> list[str]:
+        """赛跑必跑的核心模型：race.models 里约束允许的；约束只允许别的模型时（如高可解释性只剩评分卡）用约束允许的全部。"""
+        allowed = allowed_models(self.spec)
+        return [m for m in allowed if m in self.cfg["race"]["models"]] or allowed
+
     def _code_inputs(self) -> list[str]:
         return [f for f in self.p.get("code_inputs", []) if f not in self.p["quarantined"]]
 
@@ -338,7 +345,7 @@ class Orchestrator:
         kh = load_knowhow(self.spec.dataset, self.cfg)
         tr = DataAccess(self.spec.dataset, str(self.art)).load("train")
         feats = res["config"]["features"]
-        scan = {} if self.cfg.get("ablation", {}).get("no_guardrail") else scan_features(tr, feats, kh, self.cfg, self.spec.dataset, *self._registered_features(res))
+        scan = scan_features(tr, feats, kh, self.cfg, self.spec.dataset, *self._registered_features(res))
         try:
             out = self.evaluator.evaluate(res, base_result, scan, history_verdicts=self.p["history_verdicts"],
                                           remaining_budget_frac=bud.remaining_frac(self.p["budget"]),
@@ -370,7 +377,10 @@ class Orchestrator:
                if others else f"赛跑中 {tie['recommended']} 明显领先（其余模型差距 ≥ MDE {tie['mde']:.4f}）")
         d = Decision(action="PROMOTE_FIDELITY", params={"exp_id": f"{self.task_id}_race_{tie['recommended']}"},
                      hypothesis=f"{why}；升到全量复验，得到第一个最终模型", expected_gain="第一个全保真最终模型",
-                     est_cost=EstCost(), rationale="规则：赛跑后第一次升全量按打平规则选模型（evaluation/ties.py）")
+                     est_cost=EstCost(), rationale="规则：赛跑后第一次升全量按打平规则选模型（evaluation/ties.py）",
+                     user_note=(f"几个模型效果相当，先选 {tie['recommended']} 用全部数据训练，得到第一个可用的模型" if others
+                                else f"{tie['recommended']} 明显最好，先用全部数据训练它，得到第一个可用的模型" if len(tie["models"]) > 1
+                                else f"先用全部数据训练 {tie['recommended']}，得到第一个可用的模型"))
         self.events.append("decision", {"attempt": 0, "decision": d.model_dump(mode="json"), "by": "rule"})
         return d, 0
 
@@ -454,8 +464,9 @@ class Orchestrator:
             self.p["current_node"] = pd["parent"]
         if pd["kind"] == "investigate":
             node = self.store.get(self.p["current_node"])
-            q = pd["decision"]["params"]["question"]
-            pd["investigation"] = {q: investigate(self.spec.dataset, self.cfg, q, node.config["features"])}
+            q, want = pd["decision"]["params"]["question"], pd["decision"]["params"].get("features")
+            fs = [f for f in want if f in node.config["features"]] if want else node.config["features"]   # 只能看当前特征集里的
+            pd["investigation"] = {q: investigate(self.spec.dataset, self.cfg, q, fs or node.config["features"])}
         return S.RECORD
 
     def _evaluate(self):

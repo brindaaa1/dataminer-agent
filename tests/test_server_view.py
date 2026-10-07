@@ -1,5 +1,6 @@
 """快照：示例任务（DeepSeek 真实运行）的轮次、播报、结论卡；接入阶段的问题显示与草稿视图。"""
 import json
+from pathlib import Path
 
 import pytest
 
@@ -14,8 +15,11 @@ def ws(tmp_path, monkeypatch):
 
 
 def _example():
+    """录制的一次真实运行（酒店样本，DeepSeek）：有被拒的全量复验、换模型、疑似过拟合，覆盖面广，留作测试数据。"""
+    from unittest.mock import patch
     from server import examples
-    return examples.load("hotel_deepseek3")
+    with patch.dict("os.environ", {"DATAMINER_EXAMPLES": str(Path(__file__).parent / "fixtures")}):
+        return examples.load("hotel_deepseek3")
 
 
 def test_example_snapshot_rounds_and_narration():
@@ -53,7 +57,7 @@ def test_question_display_is_human_readable():
                                           "holdout": ["2017-05", "2017-08"]})) \
         == "训练/验证 2015-07~2016-12 · OOT-dev 2017-01~2017-04 · holdout 2017-05~2017-08"
     assert display("metric", json.dumps({"primary": "auc", "guards": {"ks": 0.02}})) == "主指标 AUC，护栏 KS 跌幅 ≤ 0.02"
-    assert display("assigned_room_type", "隔离（at_checkin）") == "隔离（at_checkin）"
+    assert display("assigned_room_type", "隔离（before_outcome）") == "隔离（before_outcome）"
 
 
 def test_live_intake_snapshot(ws):
@@ -127,3 +131,94 @@ def test_final_narration_wording_when_holdout_is_higher():
     sm = {"stop_reason": None, "final": {"holdout_auc": 0.655, "drop": -0.003, "reference_drop": -0.006, "overfit_to_oot_dev": False}}
     t = _closing([], sm, "auc", "AUC")[0]["text"]
     assert t == "最终检验：holdout AUC 0.655，比 OOT-dev 高 0.003（默认参照模型高 0.006，多掉 0.003）"
+
+
+def test_intake_draft_shows_domain_and_groups_generic_availability():
+    from server.view import _draft
+    d = {"label": None, "observation_time_expr": None, "windows": None, "metric": None, "domain": "credit_risk",
+         "leakage": [], "quarantine": [],
+         "fields": {"a": {"type": "numeric", "availability": "at_prediction"}, "b": {"type": "numeric", "availability": "before_outcome"},
+                    "c": {"type": "numeric", "availability": "updated_until_event"}}}
+    v = _draft(d, {})
+    assert v["domain"] == "信贷风控（违约预测）"
+    assert {f["name"]: f["group"] for f in v["fields"]} == {"a": "ok", "b": "leak", "c": "quarantine"}
+    assert _draft({**d, "domain": "_default"}, {})["domain"] == "通用二分类"
+
+
+def test_user_brief_narration_has_only_milestones_in_plain_words():
+    """用户视图的对话只播关键节点（赛跑结果、第一个可用模型、模型变好、停止、最终检验），不出现 gap、诊断码、实验 id、LLM 原话。"""
+    from server.view import snapshot
+    r = snapshot(_example())["run"]
+    brief = [n["text"] for n in r["brief"]]
+    assert brief[0].startswith("先试了 lgbm、lr_scorecard") and "最好" in brief[0]
+    assert any(t.startswith("第 4 轮：得到第一个可用的模型（lr_scorecard）") for t in brief)
+    assert any(t.startswith("停止：agent 判断继续尝试的收益低于成本") for t in brief)
+    assert any(t.startswith("最终检验：AUC 0.731") and "可能过拟合" in t for t in brief)
+    joined = " ".join(brief)
+    for jargon in ("gap", "OVERFIT_GAP", "hotel_deepseek3_e", "promotable", "OOT-dev", "全量复验"):
+        assert jargon not in joined
+    assert len(brief) < len(r["narration"])
+    for t in brief:                                   # 提到时间外验证的表现时，同时给出训练集的表现，表意才完整
+        if "时间外验证" in t:
+            assert "训练集" in t, t
+    assert r["rounds"][1]["action_user"] == "用全量数据复验"
+
+
+def test_final_card_has_user_risks_and_lift():
+    from server.view import snapshot
+    f = snapshot(_example())["run"]["final"]
+    assert f["risks_user"] == ["最终检验比时间外验证低 0.086，模型在新的时间段上可能不稳。"]
+    assert len(f["risks_user"]) < len(f["risks"]) and "lift_top10" in f
+
+
+def test_round_carries_the_user_note_and_user_risks_are_plain():
+    """决策里给业务人员看的一句话（user_note）进入轮次；用户视图的风险换成平实说法，不出现 holdout、OOT-dev、δ。"""
+    from server.view import snapshot
+    src = _example()
+    first = next(e["id"] for e in src["events"] if e["type"] == "decision")
+    ev = [{**e, "payload": {**e["payload"], "decision": {**e["payload"]["decision"], "user_note": "先用全部数据复验这个模型，看看效果是否稳定。"}}}
+          if e["id"] == first else e for e in src["events"]]
+    r = snapshot({**src, "events": ev})["run"]
+    assert r["rounds"][1]["user_note"] == "先用全部数据复验这个模型，看看效果是否稳定。" and r["rounds"][2]["user_note"] is None
+    risks = r["final"]["risks_user"]
+    assert any("最终检验比时间外验证低 0.086" in x and "可能不稳" in x for x in risks)
+    assert not any(k in x for x in risks for k in ("holdout", "OOT-dev", "δ"))
+
+
+def test_intake_draft_shows_the_llm_data_summary():
+    from server.view import _draft
+    d = {"label": None, "observation_time_expr": None, "windows": None, "metric": None, "domain": "_default", "leakage": [], "quarantine": [],
+         "fields": {}, "data_summary": "每行是一笔酒店预订，覆盖 2015–2017 年。"}
+    assert _draft(d, {})["data_summary"] == "每行是一笔酒店预订，覆盖 2015–2017 年。"
+
+
+def test_intake_draft_shows_history_fields():
+    from server.view import _draft
+    d = {"label": None, "observation_time_expr": None, "windows": None, "metric": None, "domain": "_default", "leakage": [], "quarantine": [],
+         "fields": {"price": {"type": "numeric", "availability": "post_outcome", "reason": "当前电价是标签来源",
+                              "history": {"lags": [1, 2], "means": [48]}}}}
+    f = _draft(d, {})["fields"][0]
+    assert f["group"] == "leak" and f["history"] == "历史值可用：前 1、2 条，过去 48 条均值"
+
+
+def test_example_carries_its_public_langfuse_trace():
+    """随仓库分发的示例都是录制的真实运行，在 Langfuse 上有公开的 trace：产出页和过程页要能跳过去。"""
+    from server import examples
+    from server.view import snapshot
+    for name in examples.names():
+        assert snapshot(examples.load(name))["langfuse_url"].startswith("https://cloud.langfuse.com/"), name
+
+
+def test_example_exported_from_the_workbench_keeps_its_intake(tmp_path, monkeypatch):
+    """从工作台导出的示例（Elec2）带着接入过程：过程页能看到数据描述和确认过的配置。"""
+    import json
+    from server import examples
+    from server.view import snapshot
+    rec = {"task_id": "elec", "note": "", "meta": {"dataset": "电价样本", "llm": "DeepSeek"}, "events": [], "records": [],
+           "description": "我们是电力市场的分析团队。", "intake": {"round": 3, "written": None, "confirmed": {},
+           "last_draft": {"label": None, "observation_time_expr": None, "windows": None, "metric": None, "domain": "_default",
+                          "leakage": [], "quarantine": [], "fields": {}, "data_summary": "每行是一个半小时。"}}}
+    (tmp_path / "elec.json").write_text(json.dumps(rec, ensure_ascii=False))
+    monkeypatch.setenv("DATAMINER_EXAMPLES", str(tmp_path))
+    s = snapshot(examples.load("elec"))
+    assert s["intake"]["draft"]["data_summary"] == "每行是一个半小时。" and s["data"]["description"] == "我们是电力市场的分析团队。"

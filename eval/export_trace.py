@@ -1,12 +1,13 @@
-"""把一次运行的事件日志和实验记录导出成 JSON，供 app.py 作为内置示例展示（不含原始数据行）。
+"""把一次运行的事件日志和实验记录导出成 JSON，作为工作台的示例任务展示（不含原始数据行）。
 
-    python -m eval.export_trace --db artifacts/state.db --task-id lc_kimi1 --note "..." \
-        --meta '{"dataset": "Lending Club", "llm": "Kimi（kimi-k3）", "has_sample_data": false}'
+    python -m eval.export_trace --workbench-task <工作台任务 id> --task-id hotel_deepseek \
+        --meta '{"dataset": "酒店预订样本", "llm": "DeepSeek（deepseek-flash）", "has_sample_data": true}'
+    python -m eval.export_trace --db artifacts/state.db --task-id demo1 --meta '{...}'      # 命令行运行（没有接入过程）
 
 meta 是页面上"运行档案"的内容（数据集、模型、设置等），只写能从运行命令或日志核实的信息。
 --optuna-db 给出时，同时导出每个实验的 Optuna trial（页面画调参过程）。已有的导出只补 trial：
 
-    python -m eval.export_trace --add-trials examples/traces/hotel_deepseek3.json --optuna-db artifacts_sample/optuna.db
+    python -m eval.export_trace --add-trials examples/traces/<示例>.json --optuna-db artifacts_sample/optuna.db
 """
 import argparse
 import json
@@ -36,17 +37,33 @@ def _write(path: Path, data: dict):
     print(path)
 
 
+def export_task(tid: str, name: str, meta: dict) -> dict:
+    """工作台里的任务（含接入过程）→ 示例。模型卡、实验树写到 reports/，文件名按示例名。"""
+    from server import sources
+    src = sources.live(tid)
+    for n, pat in (("model_card.md", "model_card_{}.md"), ("experiment_tree.mmd", "experiment_tree_{}.mmd")):
+        if n in src["files"]:
+            (ROOT / "examples" / "traces" / "reports" / pat.format(name)).write_text(src["files"][n].replace(tid, name))
+    out = {"task_id": name, "note": "", "description": src["data"]["description"],
+           "meta": {**meta, "langfuse_url": src["meta"].get("langfuse_url")},
+           "events": src["events"], "records": src["records"], "trials": src["trials"], "intake": src["intake"]}
+    return json.loads(json.dumps(out, ensure_ascii=False).replace(tid, name))          # 实验 id 里的任务 id 也换成示例名
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--db")
     ap.add_argument("--task-id")
     ap.add_argument("--optuna-db")
     ap.add_argument("--add-trials", help="已有导出的 JSON：只补 trials 字段")
+    ap.add_argument("--workbench-task", help="工作台里的任务 id：连同接入过程导出为示例，示例名用 --task-id")
     ap.add_argument("--note", default="")
     ap.add_argument("--meta", default="{}", help="JSON：页面运行档案里展示的信息")
     ap.add_argument("--out-dir", default="examples/traces")
     a = ap.parse_args()
-    if a.add_trials:
+    if a.workbench_task:
+        _write(Path(a.out_dir) / f"{a.task_id}.json", export_task(a.workbench_task, a.task_id, json.loads(a.meta)))
+    elif a.add_trials:
         p = Path(a.add_trials)
         ex = json.loads(p.read_text())
         ex["trials"] = load_trials(str(Path(a.optuna_db).expanduser()), [r["exp_id"] for r in ex["records"]])

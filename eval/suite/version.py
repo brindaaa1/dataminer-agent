@@ -48,5 +48,5 @@ def label_key(label: str) -> list:
 def latest_version(root: Path, tier: str, before: str) -> dict | None:
     """同档、已跑完、版本号排在 before 之前的最后一个。按版本号而不是跑完的时间：重跑旧版本不会变成"上一版本"。"""
     vs = [json.loads(p.read_text()) for p in Path(root).glob("*/version.json")]
-    vs = [v for v in vs if v.get("tier") == tier and v.get("status", "done") == "done" and label_key(v["label"]) < label_key(before)]
+    vs = [v for v in vs if v.get("tier") == tier and v["status"] == "done" and label_key(v["label"]) < label_key(before)]
     return max(vs, key=lambda v: label_key(v["label"])) if vs else None

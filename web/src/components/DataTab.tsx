@@ -1,6 +1,7 @@
 import type { FieldRow, Snapshot, Windows } from "@/api"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { useDev } from "@/useDev"
 
 const GROUPS: Record<FieldRow["group"], [string, string]> = {
   ok: ["可用", "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"],
@@ -18,7 +19,10 @@ export function months(a: string, b: string) {
   return (y2 - y1) * 12 + (m2 - m1) + 1
 }
 
+/** 数据集基本信息与接入配置：在「过程」页最上方。建模开始后字段清单折叠起来，写出的 YAML 只在开发者视图显示。 */
 export function DataTab({ snap }: { snap: Snapshot }) {
+  const dev = useDev()
+  const started = !!snap.run
   const d = snap.intake?.draft
   const changed = new Set(snap.intake?.changed ?? [])
   const header = (
@@ -26,7 +30,8 @@ export function DataTab({ snap }: { snap: Snapshot }) {
       <b>{snap.data.csv_name}</b>{snap.data.n_rows != null && ` · ${snap.data.n_rows.toLocaleString()} 行 · ${snap.data.n_cols} 列`}
     </p>
   )
-  if (!d) return <>{header}<p className="text-sm text-muted-foreground">{snap.example ? "示例任务没有录制接入过程。" : "草稿还没生成。"}</p></>
+  const summary = d?.data_summary && <p className="mb-3 text-sm leading-relaxed">{d.data_summary}</p>
+  if (!d) return <>{header}{!started && <p className="text-sm text-muted-foreground">草稿还没生成。</p>}</>
   const row = (k: string, label: string, value: string | null) => (
     <div key={k} className={cn("flex justify-between gap-4 border-b py-1.5 text-sm", changed.has(k) && "bg-amber-50 dark:bg-amber-950/30")}>
       <span className="shrink-0 text-muted-foreground">{label}</span>
@@ -41,8 +46,12 @@ export function DataTab({ snap }: { snap: Snapshot }) {
   return (
     <div className="space-y-4">
       {header}
+      {summary}
       <section>
-        <h3 className="mb-1 text-sm font-semibold">草稿配置 · 第 {snap.intake!.round} 版</h3>
+        <h3 className="mb-1 text-sm font-semibold">{started ? "建模配置" : `草稿配置 · 第 ${snap.intake!.round} 版`}</h3>
+        <div className="flex justify-between gap-4 border-b py-1.5 text-sm" title="领域手册决定推荐的指标和规划时参考的特征方向；想换领域，在对话里说明即可">
+          <span className="shrink-0 text-muted-foreground">领域</span><span className="text-right">{d.domain ?? "通用二分类"}</span>
+        </div>
         {row("label", "标签", d.label)}
         {row("observation_time_expr", "预测时点", d.observation_time_expr)}
         {row("metric", "指标", d.metric)}
@@ -59,20 +68,22 @@ export function DataTab({ snap }: { snap: Snapshot }) {
           )}
         </div>
       </section>
-      <section>
-        <h3 className="mb-1 text-sm font-semibold">字段（{d.fields.length}）</h3>
-        <div className="mb-2 flex flex-wrap gap-1">
-          {(Object.keys(GROUPS) as FieldRow["group"][]).map((g) => <span key={g} className={cn("rounded px-2 py-0.5 text-xs", GROUPS[g][1])}>{GROUPS[g][0]} {byGroup(g).length}</span>)}
-        </div>
+      <details open={!started}>
+        <summary className="mb-1 cursor-pointer text-sm font-semibold">字段（{d.fields.length}）
+          <span className="ml-2 inline-flex flex-wrap gap-1 align-middle font-normal">
+            {(Object.keys(GROUPS) as FieldRow["group"][]).map((g) => <span key={g} className={cn("rounded px-2 py-0.5 text-xs", GROUPS[g][1])}>{GROUPS[g][0]} {byGroup(g).length}</span>)}
+          </span>
+        </summary>
         {(Object.keys(GROUPS) as FieldRow["group"][]).map((g) => byGroup(g).map((f) => (
           <div key={f.name} className={cn("flex gap-3 border-b py-1 text-sm", changed.has(`field:${f.name}`) && "bg-amber-50 dark:bg-amber-950/30")}>
             <span className="w-44 shrink-0 font-mono text-xs">{f.name}</span>
             <span className={cn("h-fit shrink-0 rounded px-1.5 text-xs", GROUPS[g][1])}>{GROUPS[g][0]}</span>
-            <span className="text-muted-foreground">{f.type}{f.reason && ` · ${f.reason}`}</span>
+            <span className="text-muted-foreground">{f.type}{f.reason && ` · ${f.reason}`}
+              {f.history && <span className="ml-1 rounded bg-blue-100 px-1.5 text-xs text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">{f.history}</span>}</span>
           </div>
         )))}
-      </section>
-      {Object.keys(snap.intake!.yaml).length > 0 && (
+      </details>
+      {dev && Object.keys(snap.intake!.yaml).length > 0 && (
         <section>
           <h3 className="mb-1 text-sm font-semibold">写出的配置</h3>
           {Object.entries(snap.intake!.yaml).map(([n, t]) => (

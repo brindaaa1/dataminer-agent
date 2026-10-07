@@ -7,7 +7,7 @@
 ## 快速开始
 
 ```bash
-git clone -b feature/agent-eval-workbench https://github.com/brindaaa1/dataminer-agent && cd dataminer-agent
+git clone https://github.com/brindaaa1/dataminer-agent && cd dataminer-agent
 ./start.sh
 ```
 

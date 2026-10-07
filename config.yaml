@@ -1,6 +1,7 @@
 # 所有阈值集中在此，代码中不硬编码。
 paths:
   knowhow_root: knowhow          # 仓库自带，见 knowhow/README.md
+  domains_root: knowhow/domains  # 领域手册；接入新数据时 knowhow_root 会改指向生成的目录，手册仍从这里读
   artifacts_root: artifacts      # 运行时产物（切分、模型、日志）；不提交到 git
   reports_root: reports          # 运行时产物（模型卡、实验树）；不提交到 git
 
@@ -28,6 +29,10 @@ split:
 
 # 任务规格：knowhow/<dataset>/ 里只有散文、无法结构化读取的部分（时间列的具体解析写法、行过滤条件）。
 # label、切分窗口、黑名单等结构化内容全部来自 knowhow/，不在这里重复。
+# 任务指标口径的默认值；各数据集在 task_specs.<ds>.metric 覆盖。运行开始前锁定，之后各模块只读。
+# 主指标决定所有比较（Optuna 目标、OVERFIT_GAP、配对 bootstrap）；guards 只拦截：相对当前最优变差超过容差即拒。
+metric: {primary: auc, guards: {}}
+
 task_specs:
   lending_club:
     row_filter: "trim(term) = '36 months'"        # 呼应 data_dictionary.yaml 的 maturity_rule
@@ -36,12 +41,14 @@ task_specs:
     date_format: "%b-%Y"                          # data_dictionary 里 type: date 字段的格式
     prior_aliases: {earliest_cr_line: credit_history_months}   # 预处理后 earliest_cr_line 就是"信用历史月数"
     use_incumbent: false                          # 消融实验：改为 true 可评估"复用在位模型分数"的增量
+    metric: {primary: auc, guards: {ks: 0.02}}
   hotel_bookings:
     row_filter: "true"
     split_time_expr: "strptime(arrival_date_year::varchar || '-' || arrival_date_month || '-' || arrival_date_day_of_month::varchar, '%Y-%B-%d')"
     observation_time_expr: "strptime(arrival_date_year::varchar || '-' || arrival_date_month || '-' || arrival_date_day_of_month::varchar, '%Y-%B-%d') - to_days(lead_time)"
     use_incumbent: false
     csv_null_values: ["NA"]                       # children 列里的 NA 字符串
+    metric: {primary: auc, guards: {pr_auc: 0.02}}
     derived_expr_overrides:                       # know-how 里的伪 SQL 在 DuckDB 中的等价写法（不改 knowhow 文件）
       booking_month: "month(arrival_date - to_days(lead_time::int))"
     sql_aliases:                                  # classic_derived 表达式里用到的量（data_dictionary.observation_time 中的文字定义）
@@ -52,13 +59,14 @@ task_specs:
     pit_extra_filters:                    # pit_rules 中只有散文的部分，供 features/factory.py 使用
       bureau: "(DAYS_ENDDATE_FACT IS NULL OR DAYS_ENDDATE_FACT <= 0)"
     dev_sample_ids: 30000                # 开发期特征计算只用这么多申请人；最终结果再用全量
+    metric: {primary: auc, guards: {ks: 0.02}}
 
 thresholds:
   maturity_current_share_max: 0.05    # 某月未完结状态占比超过则 DATA_FATAL 警告
   missing_shift_report: 0.20          # train 与 oot_dev 缺失率相差超过此值，写入报告
 
 fidelity:
-  low:  {sample_frac: 0.10, n_trials: 20,  early_stopping_rounds: 20}
+  low:  {sample_frac: 0.10, min_rows: 20000, n_trials: 20,  early_stopping_rounds: 20}   # 抽样后至少 2 万行（不足则全量）：小样本上分数随采样种子差 0.01
   full: {sample_frac: 1.0,  n_trials: 100, early_stopping_rounds: 50}
 
 inner_loop:
@@ -66,22 +74,26 @@ inner_loop:
   warm_start_max_frac: 0.10  # 初始点最多占 trial 总数的比例
   pruner_startup_trials: 5
   report_every: 50           # lgbm 每多少棵树向 pruner 汇报一次
-  cost_coef_sec: 1.0e-8      # 成本估算：秒 ≈ 系数 × 行数 × 特征数 × 树数×trial 数；随实测校准
+  cost_coef_sec: 4.5e-7      # 成本估算：CPU 秒 ≈ 系数 × 模型倍数 × 行数 × 特征数 × 树数×trial 数（2026-10 评测按 lgbm 实测校准）
+  cost_model_factor: {lgbm: 1.0, catboost: 9.0, random_forest: 1.5, lr_scorecard: 0.4}   # 相对 lgbm，同一次评测实测
   n_rounds_max: 500          # lgbm 每个 trial 的最大树数
 
 evaluator:
-  gap_max: 0.03                # OVERFIT_GAP：valid AUC − OOT-dev AUC
   leak_single_auc: 0.75        # LEAK_SUSPECT：单特征 AUC
   psi_warn: 0.10
   psi_severe: 0.25
   psi_bins: 10
-  max_features: 60
+  max_features: 60            # TOO_MANY_FEATURES：不知道原始特征数时的总数上限
+  max_added_features: 40      # TOO_MANY_FEATURES：相对原始特征最多新增多少（防特征工程失控，不限制原始数据宽度）
   bootstrap_n: 1000
   bootstrap_seed: 0
+  mde: {target: 0.01, power: 0.8, auc_corr: 0.82}   # OOT-dev 能分辨的最小提升；auc_corr：同一 OOT 上两个候选 AUC 的相关（v5 实测 SE_Δ/SE 0.3–0.6，取 0.6 ↔ 0.82）
   no_progress_rounds: 3        # NO_PROGRESS：连续 N 轮 REJECT/INCONCLUSIVE
+  inconclusive_up_mde_frac: 1.0   # 低保真比对照高 ≥ 该比例 × MDE 才算更好：不计入 NO_PROGRESS、才能升全量；差距更小是打平
   budget_low_frac: 0.15
   plateau_ci_hint: true
   early_stop_min_frac: 0.05    # NO_CONVERGE：最佳迭代数 < n_rounds_max × 该比例（几乎没学到东西）
+  overfit_gap: {mode: relative, tolerance: 0.05}   # OVERFIT_GAP：gap 超过参照模型（默认 LightGBM）自己的 gap + 容差才拒；没有参照时用 metrics.py 的固定阈值
 
 oot_budget:
   alpha_0: 0.05
@@ -89,7 +101,7 @@ oot_budget:
   policy: log                  # alpha_k = alpha_0 / (1 + ln k)
 
 final_gate:
-  delta: 0.02                  # holdout 比 OOT-dev 低超过此值 → 标注"疑似对 OOT-dev 过拟合"
+  delta: 0.02                  # holdout 比 OOT-dev 低得比默认参照模型（overfit_gap.mode=relative 时）多出此值 → 标注"疑似对 OOT-dev 过拟合"
 
 decide:
   max_retries: 3               # LLM 输出校验失败后的重试次数
@@ -97,18 +109,29 @@ decide:
   topk: 3                      # 上下文中"最优 k 条 / 最近被拒 k 条"
   policy_deviation_min_rationale_chars: 20
 
+race:
+  models: [lgbm, catboost]     # 核心模型：赛跑必跑（随机森林每次 30–44 秒、几乎没赢过，不在核心里）
+  max_extra: 2                 # LLM 在 PLAN 里提名的其他模型最多追加几个参赛（只能补充、不能砍掉核心）
+  tie_preference: [catboost, lgbm, random_forest, lr_scorecard]   # 赛跑打平（差距 < MDE）时按这个顺序推荐；v7–v11 两份数据上 catboost 当最终模型 holdout 都更高
+  rule_first_promotion: true   # 赛跑后第一次升全量由代码按打平规则做，不调 LLM
 run:
-  max_rounds: 12
+  max_rounds: 6
   budget: {tokens: 200000, cpu_minutes: 240, wall_minutes: 120}
 
 llm:
   providers:                  # --llm <名字> 选择；key 只从环境变量（或 .env）读取，不写进本文件
     anthropic: {type: anthropic, model: claude-sonnet-5, key_env: ANTHROPIC_API_KEY}
     kimi:      {type: openai_compat, model: kimi-k3, base_url: "https://api.moonshot.cn/v1", key_env: MOONSHOT_API_KEY, fixed_temperature: 1, max_tokens: 8000}
-    deepseek:  {type: openai_compat, model: deepseek-chat, base_url: "https://api.deepseek.com/v1", key_env: DEEPSEEK_API_KEY}
+    deepseek:  {type: openai_compat, model: deepseek-flash, base_url: "https://api.deepseek.com/v1", key_env: DEEPSEEK_API_KEY, max_tokens: 16000, thinking: true}
     # 不同账号能用的模型名不同；先用 client.models.list() 确认，再改这里。
+  prices:                     # 美元 / 百万 token，评测折算花费用；以服务商官网为准
+    deepseek-flash: {input_cache_miss: 0.14, input_cache_hit: 0.0028, output: 0.28}
   model: claude-sonnet-5      # 兼容旧字段
   max_tokens: 2000
+  timeout_sec: 120            # 单次调用超时；SDK 默认 600 秒，断线时一轮会卡半小时以上（推理模式正常 ≤ 60 秒）
+  deadline_sec: 180            # 单次调用的总时长上限（timeout_sec 只管两次收到数据的间隔）；正常最长约 110 秒
+  deadline_retries: 2          # 超过总时长后重新发起的次数
+  max_retries: 6              # 断网/超时时 SDK 自动重试（指数退避）；默认 2 次在网络不稳时会让整次运行作废
   decide_temperature: 0.0
 
 screen:                        # 筛选漏斗，顺序：缺失率 → IV → 单特征 AUC 报警 → 相关性去重 → PSI

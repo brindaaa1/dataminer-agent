@@ -83,3 +83,40 @@ def test_prepare_handles_real_datetime_columns():
     df = pd.DataFrame({"_obs_time": t, "d": t + pd.to_timedelta([3, -2], unit="D"), "x": [1.0, 2.0]})
     X, _ = prepare(df, [])
     assert X["d"].tolist() == [3.0, -2.0] and X["x"].tolist() == [1.0, 2.0]
+
+
+def test_tune_does_not_replay_parent_trials(env):
+    """v4 评测 lending_club：TUNE 与父实验同种子、同空间，采样序列逐点重放，调参等于重跑（AUC 一位不差）。
+    同一个 seed 下，不同实验的采样点应不同；同一实验重跑仍可复现。"""
+    run_study("t_parent", "toy", "lgbm", env, n_trials=4, seed=0)
+    run_study("t_child", "toy", "lgbm", env, n_trials=4, seed=0)
+    db = f"sqlite:///{env['paths']['artifacts_root']}/optuna.db"
+    params = lambda n: [t.params for t in optuna.load_study(study_name=n, storage=db).trials]
+    assert params("t_parent") != params("t_child")
+
+
+def test_prepare_turns_nullable_dtypes_into_float():
+    """v5 评测 home_credit：切分里有 pandas 可空类型（Yes/No → boolean、带缺失的整数 → Int64），缺失是 pd.NA，
+    CatBoost 转 float 直接报错。prepare 统一转成 float64，缺失为 NaN。"""
+    from modeling.prep import prepare
+    df = pd.DataFrame({"flag": pd.array([True, None, False], dtype="boolean"), "days": pd.array([-5, None, 3], dtype="Int64")})
+    X, _ = prepare(df, [])
+    assert all(X[c].dtype == "float64" for c in X) and X["flag"].tolist()[0] == 1.0 and np.isnan(X["days"][1])
+
+
+def test_low_fidelity_has_a_row_floor():
+    """A/A 诊断：hotel 训练集 2.1 万行，30% 只剩 6300 行，同一模型赛跑 OOT-dev 随采样种子差 0.010；全量 10 trial 只差 0.0016。
+    低保真抽样比例 = max(sample_frac, min_rows / 训练行数)，最多 1；大数据集仍按比例抽。"""
+    from modeling.inner_loop import effective_frac
+    fid = {"sample_frac": 0.3, "min_rows": 20_000}
+    assert effective_frac(fid, 21_096) == pytest.approx(20_000 / 21_096)      # hotel：约 95%
+    assert effective_frac(fid, 8_000) == 1.0
+    assert effective_frac(fid, 50_000) == pytest.approx(0.4)
+    assert effective_frac(fid, 72_000) == 0.3
+    assert effective_frac({"sample_frac": 0.3}, 21_096) == 0.3                 # 没配下限：照旧
+
+
+def test_run_study_uses_row_floor_and_reports_rows(env):
+    env["fidelity"]["low"].update(sample_frac=0.3, min_rows=2000)
+    r = run_study("t_floor", "toy", "lgbm", env, fidelity="low", n_trials=2)
+    assert r["n_rows"] == 2000                                                 # 3000 行 × max(0.3, 2000/3000)

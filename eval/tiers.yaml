@@ -1,0 +1,14 @@
+# 评测档位（spec 2026-10-05 §3）。快档每次改动后默认跑；全档在重要改动合并前、阶段性里程碑时跑。
+# 回归对比只在同档、同设置之间做。情景底座可以加：在 scenarios 里多写一行 {name, base}。
+fast:
+  datasets: [hotel_bookings, lending_club]
+  seeds: [0, 1]
+  scenarios: &scn
+    - {name: leak, base: lending_club}
+    - {name: missing_spec, base: lending_club}
+    - {name: small_oot, base: lending_club}
+    - {name: no_signal, base: lending_club}
+full:
+  datasets: [hotel_bookings, lending_club, home_credit]
+  seeds: [0, 1, 2]
+  scenarios: *scn

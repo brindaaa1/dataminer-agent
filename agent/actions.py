@@ -19,6 +19,11 @@ def allowed_models(spec) -> list[str]:
         ([] if spec.constraints.interpretability == "high" else ms)
 
 
+def model_profiles(spec) -> dict[str, str]:
+    """给 LLM 看的模型档案：只列约束允许的模型。"""
+    return {m: ZOO[m].profile for m in allowed_models(spec)}
+
+
 def _check_space(model, space):
     default = ZOO[model].default_space
     for k, s in space.items():

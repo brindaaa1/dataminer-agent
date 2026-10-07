@@ -1,0 +1,34 @@
+{
+ "home_credit": {
+  "b0": {
+   "name": "b0_v6_home_credit",
+   "oot_dev_auc": 0.7433031985510687,
+   "oot_dev_ks": 0.35616054079954984,
+   "holdout_auc": 0.7468767733009971,
+   "wall_sec": 0.6102437973022461,
+   "n_features": 122,
+   "best_iter": 40
+  },
+  "b1": {
+   "name": "b1_v6_home_credit",
+   "oot_dev_auc": 0.7470152791332203,
+   "oot_dev_ks": 0.3689550015093035,
+   "holdout_auc": 0.75368334066213,
+   "wall_sec": 349.54439187049866,
+   "n_features": 122,
+   "best_estimator": "xgb_limitdepth",
+   "time_budget": 349.6,
+   "best_config": {
+    "n_estimators": 872,
+    "max_depth": 2,
+    "min_child_weight": 0.004474335487777207,
+    "learning_rate": 0.11283736024869287,
+    "subsample": 0.8880278633092343,
+    "colsample_bylevel": 0.727382117046474,
+    "colsample_bytree": 0.8363939460632153,
+    "reg_alpha": 0.009218276889744654,
+    "reg_lambda": 56.23353669849171
+   }
+  }
+ }
+}

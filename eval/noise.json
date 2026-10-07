@@ -1,0 +1,50 @@
+{
+ "calibrated": true,
+ "from": {
+  "hotel_bookings": [
+   "v9b",
+   "v9a"
+  ],
+  "lending_club": [
+   "v10b",
+   "v10a"
+  ]
+ },
+ "bands": {
+  "holdout": 0.0141,
+  "delta_b1": 0.0074,
+  "wasted_rate": 0.125,
+  "rejected_decisions": 1.0,
+  "upgrade_hit_rate": 0.2,
+  "fe_in_final": 0.5
+ },
+ "by_dataset": {
+  "hotel_bookings": {
+   "holdout": 0.0141,
+   "delta_b1": 0.0074,
+   "wasted_rate": 0.125,
+   "rejected_decisions": 1.0,
+   "upgrade_hit_rate": 0.2,
+   "fe_in_final": 0.5
+  },
+  "lending_club": {
+   "holdout": 0.0052,
+   "delta_b1": 0.0052,
+   "wasted_rate": 0.1,
+   "rejected_decisions": 1.0,
+   "upgrade_hit_rate": 0.2,
+   "fe_in_final": 0.5
+  }
+ },
+ "cost_ratio": {
+  "hotel_bookings": {
+   "wall_sec": 1.3,
+   "cost_usd": 1.68
+  },
+  "lending_club": {
+   "wall_sec": 1.3,
+   "cost_usd": 1.3
+  }
+ },
+ "note": "v10 只在 lending_club 上做 A/A（轮数上限 6）；hotel 保留 v9 A/A（轮数上限 8）的校准。"
+}

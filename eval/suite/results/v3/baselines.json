@@ -1,0 +1,33 @@
+{
+ "lending_club": {
+  "b0": {
+   "name": "b0_v3_lending_club",
+   "oot_dev_auc": 0.6410340843621717,
+   "oot_dev_ks": 0.2086977425847883,
+   "holdout_auc": 0.6473875093262106,
+   "wall_sec": 0.13577008247375488,
+   "n_features": 35,
+   "best_iter": 32
+  },
+  "b1": {
+   "name": "b1_v3_lending_club",
+   "oot_dev_auc": 0.6521915056546174,
+   "oot_dev_ks": 0.22272246150294406,
+   "holdout_auc": 0.6585967930580371,
+   "wall_sec": 164.33740210533142,
+   "n_features": 35,
+   "best_estimator": "lgbm",
+   "time_budget": 164.4,
+   "best_config": {
+    "n_estimators": 293,
+    "num_leaves": 9,
+    "min_child_samples": 25,
+    "learning_rate": 0.04553170210941156,
+    "log_max_bin": 8,
+    "colsample_bytree": 0.676281211713299,
+    "reg_alpha": 0.19842026156048442,
+    "reg_lambda": 1.8857120252201518
+   }
+  }
+ }
+}

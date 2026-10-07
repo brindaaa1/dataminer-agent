@@ -16,6 +16,7 @@
 #   structural_missing_before      该字段在某个时间点之前整体缺失（会造成跨期漂移）
 
 dataset: lending_club
+domain: credit_risk               # 领域手册：knowhow/domains/credit_risk/
 entity_key: id
 observation_time_col: issue_d        # 放款月份，格式如 "Dec-2015"，需解析为日期
 

@@ -20,6 +20,54 @@ def load_knowhow(dataset: str, cfg: dict) -> dict:
             "blacklist": _yaml(root / "blacklist.yaml")}
 
 
+# ---------- 领域手册（knowhow/domains/）：_default 打底，具体领域覆盖标量与字典、追加列表 ----------
+APPEND = ("leakage_name_patterns", "leakage_desc_keywords", "sanity_rules")
+
+
+def _domains_root(cfg: dict) -> Path:
+    """领域手册不跟数据集的 know-how 目录走：接入新数据时 knowhow_root 会指向这份数据单独生成的目录。"""
+    return Path(cfg["paths"].get("domains_root") or Path(cfg["paths"]["knowhow_root"]) / "domains")
+
+
+def domains(cfg: dict) -> list[dict]:
+    """可选的领域（不含 _template 骨架）：给接入起草时推荐用。"""
+    out = []
+    for d in sorted(_domains_root(cfg).iterdir()):
+        pb = _yaml(d / "playbook.yaml")
+        if d.name != "_template" and pb:
+            out.append({k: pb.get(k) for k in ("name", "title", "description", "match_keywords", "metric")})
+    return out
+
+
+def load_domain(name: str | None, cfg: dict) -> dict:
+    base = _yaml(_domains_root(cfg) / "_default" / "playbook.yaml") or {}
+    if not name or name == "_default":
+        return base
+    dom = _yaml(_domains_root(cfg) / name / "playbook.yaml") or {}
+    out = {**base, **{k: v for k, v in dom.items() if k not in APPEND}}
+    for k in APPEND:
+        out[k] = list(dict.fromkeys((base.get(k) or []) + (dom.get(k) or [])))
+    return out
+
+
+def dataset_domain(dataset: str, cfg: dict) -> str:
+    """数据集在 data_dictionary 里声明的领域；没声明用通用手册。"""
+    return (load_knowhow(dataset, cfg)["dictionary"] or {}).get("domain") or "_default"
+
+
+def domain_context(dataset: str, cfg: dict) -> dict:
+    """规划（PLAN）时给 LLM 的领域信息：提出特征假设时的概念词表、正类含义、泄漏线索。"""
+    d = load_domain(dataset_domain(dataset, cfg), cfg)
+    return {"title": d.get("title"), "positive_meaning": (d.get("target") or {}).get("positive_meaning"),
+            "feature_concepts": [{k: f.get(k) for k in ("id", "concept", "direction", "rationale")} for f in d.get("feature_concepts") or []],
+            "leakage_name_patterns": d.get("leakage_name_patterns") or []}
+
+
+def target_direction(dataset: str, cfg: dict) -> dict:
+    """knowhow/<数据集>/priors.yaml 的目标方向：+1 = 值越大越可能是正类。新数据集可以没有。"""
+    return (_yaml(Path(cfg["paths"]["knowhow_root"]) / dataset / "priors.yaml") or {}).get("target_direction") or {}
+
+
 def header(path: str) -> list[str]:
     with open(path, newline="") as f:
         return next(csv.reader(f))
@@ -118,8 +166,9 @@ def normalize(kh: dict, main_table: str | None = None) -> tuple[dict, dict]:
 
 
 # 可得时间的"强弱"：数值越大越弱（越可能是事后信息）。派生特征的可得时间 = 其输入中最弱的一个（§4.11）。
-AVAIL_RANK = {"application": 0, "bureau_at_orig": 0, "loan_terms": 0, "at_booking": 0, "history": 0, "incumbent_model": 0,
-              "meta": 0, "updated_until_event": 1, "unknown": 1, "at_checkin": 2, "post_origination": 3, "post_outcome": 3}
+# 通用取值：at_prediction（预测时点已知）、before_outcome（预测时点之后、结果之前才确定）；application 等是信贷数据集更细的说法。
+AVAIL_RANK = {"at_prediction": 0, "history": 0, "application": 0, "bureau_at_orig": 0, "loan_terms": 0, "incumbent_model": 0,
+              "meta": 0, "updated_until_event": 1, "unknown": 1, "before_outcome": 2, "post_origination": 3, "post_outcome": 3}
 
 
 def derive_availability(expr: str, known: dict, declared: str | None = None) -> tuple[str, str | None]:
@@ -136,6 +185,32 @@ def derive_availability(expr: str, known: dict, declared: str | None = None) -> 
     return eff, warn
 
 
+def label_sql(label: dict) -> str:
+    """标签的 SQL：由状态字段按取值打 0/1，或直接用已是 0/1 的列。"""
+    if "source_col" in label:
+        q = lambda xs: ", ".join("'" + x.replace("'", "''") + "'" for x in xs)
+        c = f'"{label["source_col"]}"::VARCHAR'          # 列名可能带空格；取值按文本比较（0/1 标签写成 '1'、'0'）
+        return (f"CASE WHEN {c} IN ({q(label['positive'])}) THEN 1 "
+                f"WHEN {c} IN ({q(label['negative'])}) THEN 0 END")
+    return label["col"]
+
+
+def _history(d: dict) -> tuple[dict, dict]:
+    """历史值可用的字段（data_dictionary 里 history: {lags, means}）：当前值是泄漏，但预测时点之前的取值已知。
+    生成 <列>_lag<k>（前第 k 条）和 <列>_mean<n>（过去 n 条的均值，不含当前行）；标签列按 0/1。
+    窗口写成占位符 __HIST__，切分时换成按预测时点排序（及分组）的窗口。"""
+    known, dexpr = {}, {}
+    label = d.get("label", {})
+    for c, spec in (d.get("fields") or {}).items():
+        h = spec.get("history") or {}
+        src = label_sql(label) if c == label.get("source_col") else f'"{c}"'
+        for k in h.get("lags", []):
+            dexpr[f"{c}_lag{k}"] = f"LAG({src}, {k}) OVER (__HIST__)"
+        for n in h.get("means", []):
+            dexpr[f"{c}_mean{n}"] = f"AVG({src}) OVER (__HIST__ ROWS BETWEEN {n} PRECEDING AND 1 PRECEDING)"
+    return {k: {"availability": "history", "type": "derived"} for k in dexpr}, dexpr
+
+
 def field_table(kh: dict, main_table: str | None = None, expr_overrides: dict | None = None):
     """返回 (known, dexpr, warnings)：known = 登记字段 + 派生特征（可得时间已按继承规则算好）；
     dexpr = 派生特征名 → 可执行表达式（应用方言覆盖后）。切分（data/splits）与泄漏扫描（evaluator）共用这一份口径。"""
@@ -147,12 +222,12 @@ def field_table(kh: dict, main_table: str | None = None, expr_overrides: dict | 
         dexpr[c["name"]] = (expr_overrides or {}).get(c["name"], c["expr"])
         if w:
             warns.append({"code": "DERIVED_AVAILABILITY", "name": c["name"], "msg": w})
-    return known, dexpr, warns
+    hk, hx = _history(d)
+    return {**known, **hk}, {**dexpr, **hx}, warns
 
 
-def column_policy(dataset: str, columns: list[str], kh: dict, use_incumbent: bool = False, leak_back: bool = False,
-                  main_table: str | None = None, unregistered: str = "unknown", extra_fields: dict | None = None,
-                  suspects_back: bool = False) -> dict:
+def column_policy(dataset: str, columns: list[str], kh: dict, use_incumbent: bool = False,
+                  main_table: str | None = None, unregistered: str = "unknown", extra_fields: dict | None = None) -> dict:
     """按 data_dictionary + blacklist 给每一列定性。返回各类别的列名列表。
     unregistered: 主表里未登记字段的处理。'unknown'（默认，LC/酒店）→ 隔离；'application'（Home Credit：
     主表一行=一次当前申请，全部是申请时字段）→ 保留。由 config.task_specs 指定。"""
@@ -174,19 +249,11 @@ def column_policy(dataset: str, columns: list[str], kh: dict, use_incumbent: boo
         quarantine |= {c for c in columns if c not in fields and c not in special and c not in set().union(*drop.values())}
     for c, spec in fields.items():
         av = spec.get("availability")
-        if av in ("post_origination", "post_outcome", "at_checkin"):
+        if av in ("post_origination", "post_outcome", "before_outcome"):
             drop["leakage"].add(c)
         elif av in ("unknown", "updated_until_event") and c not in special:      # 字典声明的可得时间存疑 → 隔离
             quarantine.add(c)
     pats = [re.compile(p, re.I) for p in b.get("leakage_patterns", [])]
-    label_src = {label.get("source_col"), label.get("col")}
-    leak_truth = sorted((drop["leakage"] - label_src) & set(columns))     # 评估用标准答案（A3）
-    suspect_truth = sorted(quarantine & set(columns) & ({*(ua.get("fields", []) + ua.get("derived_fields", []))} if isinstance(ua, dict) else set(ua)))
-    if leak_back:                                                          # A3：把贷后字段放回数据，不告诉 agent
-        drop["leakage"] = drop["leakage"] & label_src
-        quarantine -= set(leak_truth)
-        if suspects_back:                                                  # 可得时间存疑的字段也放回（评估 agent 能否识别为可疑）
-            quarantine -= set(suspect_truth)
     dropped = set().union(*drop.values())
     keep = [c for c in columns if c not in dropped and c not in quarantine]
     keep = [c for c in keep if c not in special]
@@ -195,4 +262,4 @@ def column_policy(dataset: str, columns: list[str], kh: dict, use_incumbent: boo
             "pattern_hits_on_kept": sorted(c for c in keep if any(p.search(c) for p in pats)),
             "pattern_hits_on_quarantined": sorted(c for c in quarantine if any(p.search(c) for p in pats)),
             "review_flags": sorted((set(b.get("compliance", {}).get("review", []) or [])) & set(keep)),
-            "leak_truth": leak_truth, "suspect_truth": suspect_truth, "keep": keep}
+            "keep": keep}

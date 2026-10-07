@@ -4,12 +4,15 @@
 
 ```
 knowhow/
-├── domain_priors.yaml           跨数据集：风险方向、业务合理性规则、泄漏气味规则
+├── domains/                     领域手册：按业务领域组织，接入时按业务说明推荐、用户确认
+│   ├── _default/playbook.yaml   通用：任何二分类都成立的规则（指标建议、泄漏线索、合理性规则）
+│   ├── credit_risk/playbook.yaml 信贷风控（第一份填好的示例）：推荐指标、泄漏线索、特征概念
+│   └── _template/playbook.yaml  空白骨架，按注释填写新领域（如用户流失、营销响应）
 ├── templates/
-│   ├── generic_credit.yaml      与数据集无关的抽象特征模板（风控通用概念）
 │   └── <dataset>.yaml           在具体表/字段上实例化的模板
 └── <dataset>/
-    ├── data_dictionary.yaml     字段语义、可得时间、切分建议、（多表）表结构
+    ├── data_dictionary.yaml     字段语义、可得时间、切分建议、（多表）表结构；domain 声明所属领域
+    ├── priors.yaml              目标方向先验（单调约束、模型卡用）
     └── blacklist.yaml           字段使用策略：剔除 / 隔离 / 合规 / 命名模式
 ```
 
@@ -52,10 +55,10 @@ classic_derived:                          # 可选：广为使用的派生特征
 
 | 强弱 | 典型取值 | 含义 |
 |---|---|---|
-| 安全 | `application` / `at_booking` / `loan_terms` / `bureau_at_orig` / `history` | 预测时点已知 |
+| 安全 | `at_prediction` / `history` / `application` / `loan_terms` / `bureau_at_orig` | 预测时点已知 |
 | 策略问题 | `incumbent_model` | 在位模型的输出，合法但要不要用是业务决定 |
 | 存疑 → 默认隔离 | `unknown` / `updated_until_event` | 可得时间不确定 |
-| 泄漏 → 强制剔除 | `post_origination` / `post_outcome` / `at_checkin` | 结果发生后才有 |
+| 泄漏 → 强制剔除 | `before_outcome` / `post_outcome` / `post_origination` | 预测时点之后才确定 |
 | 不参与 | `meta` | 标识符/元数据 |
 
 `classic_derived` 的可得时间继承规则：**取输入字段中最弱的一个**；如果显式声明的 `availability` 比从输入推断出的更强，会被拉回到更弱的那个并在 PROFILE 报告里告警（对应 `data/knowhow.py::derive_availability`）。
@@ -125,7 +128,7 @@ leakage_patterns: ["正则表达式，不区分大小写；命中新字段名或
 ```yaml
 templates:
   - id: <模板 ID，会成为生成特征的名字前缀>
-    family: <对应 generic_credit.yaml 里的抽象概念，如 multi_lending>
+    family: <对应领域手册 feature_concepts 里的概念 id，如 multi_lending>
     source: <明细表名>
     entity: <聚合到哪个实体的主键>
     time_field: <用于 point-in-time 过滤的时间列>
@@ -133,31 +136,28 @@ templates:
     windows: [7, 30, 90, ...]              # 或 [current]：不做窗口聚合，直接算行级比例特征
     aggs: ["count", "avg(布尔或数值表达式)", "count_distinct(...)", "-min(...)  # 取负变成正向"]
     derived: ["ratio(w1/w2)", "trend(w1 vs w2)", "recency: -max(...)"]
-    monotone_prior: +1 | -1 | 0             # 风险方向；单个 agg 后面可以用注释 `# monotone_prior: -1` 覆盖模板默认值
+    monotone_prior: +1 | -1 | 0             # 目标方向（+1 = 值越大越可能是正类）；单个 agg 后面可以用注释 `# monotone_prior: -1` 覆盖模板默认值
     rationale: "业务解释，会原样写进模型卡的特征清单"
 ```
 
 `features/factory.py` 把这份配置展开成 DuckDB SQL：`time_unit: days` 时按 `time_field >= -window` 过滤，`months` 时按 `MONTHS_BALANCE >= -window` 过滤；派生的 `ratio`/`trend` 由同一批聚合结果两两运算得到，`recency` 直接翻译成 SQL 表达式。写成散文（不含运算符的自然语言）的聚合定义会被自动跳过，不会被当成 SQL 执行。
 
-`generic_credit.yaml` 结构完全一样，只是 `source`/`entity`/`time_field` 换成抽象名词（如 `credit_applications`），**不参与计算**，只作为 LLM 提出新特征假设时的概念词表（"风控里有哪些值得挖的信息维度"）。
+## `domains/<领域>/playbook.yaml` —— 领域手册
 
-## `domain_priors.yaml`
+字段说明见 `domains/_template/playbook.yaml`。`_default` 打底，具体领域覆盖标量和字典（如 `metric`）、追加列表（`leakage_name_patterns`、`leakage_desc_keywords`、`sanity_rules`）。谁在用：
+
+- 接入新数据：LLM 按业务说明和 `match_keywords` 推荐一个领域，用户在确认环节确认或修改；推荐的主指标和护栏来自手册的 `metric`。
+- 规划（PLAN）：手册的标题、正类含义、`feature_concepts`、泄漏线索进入上下文，作为提出特征假设时的概念词表。
+- 数据集在 `data_dictionary.yaml` 里用 `domain: <领域名>` 声明；不声明用 `_default`。
+
+## `<dataset>/priors.yaml` —— 目标方向先验
 
 ```yaml
-risk_direction:
-  <dataset>:
-    <字段名或特征名>: +1 | -1 | 0     # 用于 monotone_constraints；模板产出的特征优先用模板里的 monotone_prior
-  default_policy: "没有先验的特征不加单调约束；LLM 可以提议方向，但要写业务理由并过 compare 才能保留"
-
-sanity_rules: ["给人/critic 读的检查清单，报告生成时用来标注'反直觉'"]
-
-leakage_smells:
-  statistical: ["单特征 AUC 过高、只在正样本非缺失、缺失模式与 label 强相关，……"]
-  semantic: ["字段名/描述包含贷后、催收、当前状态等词"]
-  temporal: ["特征计算用到了晚于观察时点的记录，……"]
+target_direction:
+  <字段名或特征名>: +1 | -1 | 0     # +1 = 值越大越可能是正类；用于 monotone_constraints；模板产出的特征优先用模板里的 monotone_prior
 ```
 
-`leakage_smells` 是给人看的检查清单，代码里真正生效的是 `blacklist.yaml` 的 `leakage_patterns`（正则）和 `data_dictionary.yaml` 的 `availability` 标注——这份文件更多是解释"为什么这么设阈值"。
+没有先验的特征不加单调约束；LLM 可以提议方向，但要写业务理由并过 compare 才能保留。泄漏的实际判定靠 `blacklist.yaml` 的 `leakage_patterns`（正则）和 `data_dictionary.yaml` 的 `availability` 标注；领域手册的泄漏线索用于接入起草和规划时提醒。
 
 ## 新增一个数据集需要做什么
 

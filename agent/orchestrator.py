@@ -10,20 +10,23 @@ from pydantic import ValidationError
 
 from report.model_card import build_report
 
-from agent.actions import allowed_models, apply_action, config_hash
+from agent import clarify
+from agent.actions import allowed_models, apply_action, config_hash, model_profiles
 from agent.decide import DecideFailed, Validator, decide
 from agent.llm import TracedLLM, extract_json
-from agent.schemas import Plan, TaskSpec
+from agent.schemas import Decision, EstCost, Plan, TaskSpec
 from agent.states import State as S, TRANSITIONS, TERMINAL, legal
 from data.access import DataAccess
-from data.knowhow import load_knowhow
+from data.knowhow import domain_context, load_knowhow
 from evaluation.evaluator import Evaluator, scan_features
+from evaluation.metrics import primary
 from evaluation.oot_budget import OOTBudgetExhausted
-from evaluation.stop import stop_check
+from evaluation.stop import history_mark, stop_check
 from memory.consolidate import Proposals, admit, allowed_keys, update_lifecycle, validate
 from memory.retrieval import active_lessons, build_context, nearest_task
 from memory.schema import Cost, ExperimentRecord
 from memory.store import MemoryStore, Store
+from modeling.inner_loop import date_spec
 from runtime import budget as bud
 from runtime.checkpoint import Checkpoint
 from runtime.events import EventLog
@@ -60,6 +63,7 @@ class Orchestrator:
                       "pending": None, "pending_leaks": {}, "investigate_counts": {}, "investigations": {},
                       "seq": 0, "stop_reason": None, "final": None, "resume_state": None, "await": None, "last_codes": []}
         self.spec = TaskSpec(**self.p["spec"])
+        cfg["metric"] = self.spec.metric.model_dump()     # 口径以检查点里的 spec 为准：任务开始前锁定，恢复运行也不变
         self._evaluator = None
 
     # ---------- 主循环 ----------
@@ -93,6 +97,8 @@ class Orchestrator:
     def evaluator(self):
         if self._evaluator is None:
             self._evaluator = Evaluator(self.cfg, self.spec.dataset, self.task_id, self.evaluator_db)
+            self._evaluator.reference_gap = self.p.get("reference_gap")
+        self._evaluator.n_raw_features = len(self.p["all_features"]) or None      # PROFILE 之后才有
         return self._evaluator
 
     def _remaining(self):
@@ -135,7 +141,9 @@ class Orchestrator:
                            remaining_cpu_minutes=self._remaining()["cpu_minutes"], features=config["features"],
                            feature_sets=config.get("feature_sets"),
                            space=config.get("space"), fidelity=config["fidelity"], n_trials=config.get("n_trials"),
-                           warm_start=self._warm_points(parent_id, config), monotone=config.get("monotone", False))
+                           warm_start=self._warm_points(parent_id, config), monotone=config.get("monotone", False),
+                           cost_obs=self.p.get("cost_obs", {}).get(config["model"]),
+                           seed=self.cfg["run"].get("seed", 0))      # 评测按种子重复运行；默认 0，与以前一致
         return r
 
     def _write_record(self, exp_id, parent, hypothesis, action, diff, config, result, verdict, codes):
@@ -150,10 +158,15 @@ class Orchestrator:
 
     # ---------- 状态处理 ----------
     def _intake(self):
+        self.events.append("spec_locked", {"metric": self.spec.metric.model_dump()})   # 页面据此知道本次运行的主指标
         miss = self.spec.missing_required()
-        if miss:
+        if miss:                      # 不自行假设：LLM 只起草推荐答案，人确认后才写进 spec（resume_with）
+            props = self.p.setdefault("clarify", {})
+            todo = [k for k in miss if k not in props]
+            if todo:
+                props.update(clarify.draft(self._llm_json, self.spec.dataset, self.cfg, todo))
             self.p["await"] = {"reason": "spec_incomplete", "missing": miss,
-                               "questions": [f"请提供 {m}（禁止 agent 自行假设）" for m in miss]}
+                               "questions": [{"key": k, **{f: props[k][f] for f in ("question", "recommended", "reason")}} for k in miss]}
             return S.CLARIFY
         return S.PROFILE
 
@@ -170,8 +183,20 @@ class Orchestrator:
         """人工回复：spec 更新 / 放行特征 / 隔离特征。写 USER_INSTRUCTION 事件，然后回到 resume_state 重新规划（§4.14）。"""
         assert self.state == S.AWAIT_HUMAN
         self.events.append("USER_INSTRUCTION", reply)
+        props = self.p.setdefault("clarify", {})
+        redo = {}
+        for k, text in reply.get("answers", {}).items():        # 回"确认"或原样提交推荐 → 采纳；否则交给 LLM 解析原话，再确认一次
+            if clarify.accepted(text, props.get(k)):
+                v = props.pop(k)["value"]
+                self.p["spec"] = clarify.apply(self.p["spec"], k, v)
+                self.events.append("spec_confirmed", {"key": k, "value": v})
+            else:
+                redo[k] = text
+        if redo:
+            props.update(clarify.draft(self._llm_json, self.spec.dataset, self.cfg, list(redo), redo))
+        self.spec = TaskSpec(**self.p["spec"])
         if "spec" in reply:
-            self.p["spec"] = {**self.p["spec"], **reply["spec"]}
+            self.p["spec"] = {**self.p["spec"], **{k: v for k, v in reply["spec"].items() if k != "metric"}}   # 口径已锁定，人工回复不能改
             self.spec = TaskSpec(**self.p["spec"])
             banned = set(self.spec.constraints.banned_models)
             if banned:
@@ -196,6 +221,15 @@ class Orchestrator:
                 self.p["await"] = {"reason": "DATA_FATAL", "warnings": rep["warnings"]}
                 self.events.append("data_fatal", self.p["await"])
                 return S.FAILED
+        if self.cfg["evaluator"].get("overfit_gap", {}).get("mode") == "relative":
+            from evaluation.reference import reference_gap
+            ref = reference_gap(ds, self.cfg)
+            self.p["reference_gap"] = ref["gap"]
+            self.evaluator.reference_gap = ref["gap"]
+            pw = ref.pop("oot_power")
+            self.events.append("reference_gap", ref)
+            self.p["oot_power"] = pw                    # OOT-dev 能分辨多小的提升；太小就警告（evaluation/mde.py）
+            self.events.append("oot_power", pw)
         tr = DataAccess(ds, str(art)).load("train")
         self.p["all_features"] = [c for c in tr.columns if c not in META]
         fp = self._fingerprint(tr)
@@ -228,38 +262,74 @@ class Orchestrator:
                 "feature_domains": sorted({fields.get(c, {}).get("availability", "application") for c in f})}
 
     def _plan(self):
+        tr = DataAccess(self.spec.dataset, str(self.art)).load("train")
+        dates = set(date_spec(self.spec.dataset, self.cfg)[0])                    # 文本形式的日期字段不算类别变量
+        cats = [c for c in self.p["all_features"] if c not in dates and (tr[c].dtype == object or str(tr[c].dtype) == "category")]
+        prof = {**{k: self.p["fingerprint"][k] for k in ("n_samples", "bad_rate", "missing_rate", "time_span_months")},
+                "n_features": len(self.p["all_features"]), "n_categorical": len(cats),
+                "max_cardinality": int(max((tr[c].nunique() for c in cats), default=0))}
+        plan = Plan(directions=[])
         try:
-            ctx = {"mode": "PLAN", "spec": self.spec.model_dump(mode="json"), "n_features": len(self.p["all_features"])}
+            ctx = {"mode": "PLAN", "spec": self.spec.model_dump(mode="json"), "data_profile": prof, "models": model_profiles(self.spec),
+                   "race_core": self._race_core(), "domain": domain_context(self.spec.dataset, self.cfg)}       # 领域手册（knowhow/domains/）
             plan = Plan.model_validate(self._llm_json(PLAN_SYSTEM, "```json\n" + json.dumps(ctx, ensure_ascii=False) + "\n```"))
             self.p["directions"] = [d.model_dump() for d in plan.directions]
         except (ValidationError, ValueError) as e:
             self.events.append("plan_invalid", {"error": str(e)[:200]})      # 规划失败不致命：没有方向也能靠 DECIDE 继续
-        # 模型赛跑（§4.12）：同特征集、同预算、低保真，各跑一个 study；只对通过约束过滤的候选
-        for i, m in enumerate(allowed_models(self.spec)):
+        # 模型赛跑（§4.12）：同特征集、同预算、低保真下各跑一个 study。核心模型（race.models 里约束允许的）必跑，
+        # LLM 提名的其他模型最多追加 race.max_extra 个：赛跑是低成本的小样本比较，LLM 只能补充、不能砍掉候选
+        # （Elec2 测试：LLM 只提名 lgbm，catboost 没参赛）。约束只允许别的模型时（如高可解释性只剩评分卡）用约束允许的全部。
+        allowed, core = allowed_models(self.spec), self._race_core()
+        extra = [m for m in dict.fromkeys(c.model for c in plan.candidate_models) if m in allowed and m not in core]
+        race_models = core + extra[: self.cfg["race"]["max_extra"]]
+        self.events.append("plan_candidates", {"candidates": [c.model_dump() for c in plan.candidate_models], "raced": race_models})
+        for i, m in enumerate(race_models):
             exp_id = f"{self.task_id}_race_{m}"
             cfg = {"model": m, "features": self.p["all_features"], "space": None, "fidelity": "low", "n_trials": None}
             res = self._train(exp_id, cfg, None)
             if res["status"] != "OK":
                 continue
             base = self._result(self.p["race"][0]) if self.p["race"] else None
-            out = self._evaluate_result(res, base)
+            out = self._evaluate_result(res, base, guard=False)
             self._write_record(exp_id, None, f"模型赛跑：{m}", "RACE", {"model": m}, cfg, res, out["verdict"], out["codes"])
             bud.spend(self.p["budget"], cpu_minutes=res["cost"]["wall_minutes"] * self.cfg["inner_loop"]["n_threads"],
                       wall_minutes=res["cost"]["wall_minutes"])
             if exp_id not in self.p["race"]:
                 self.p["race"].append(exp_id)
+            # 实测成本：之后同一模型的成本估算按它外推（v6 评测 home_credit）
+            self.p.setdefault("cost_obs", {})[m] = {"cpu_minutes": res["cost"]["wall_minutes"] * self.cfg["inner_loop"]["n_threads"],
+                                                    "n_rows": res["n_rows"], "n_features": res["n_features"],
+                                                    "n_trials": res["n_trials"]}
             self.p["pending_leaks"].update(out["leaks"])
-        best_race = max(self.p["race"], key=lambda e: self._result(e)["metrics"]["oot_dev_auc"]) if self.p["race"] else None
-        self.p["current_node"] = best_race
+        pm = primary(self.cfg)
+        ok = [e for e in self.p["race"] if self.store.get(e).verdict != "REJECT"] or self.p["race"]
+        if ok:
+            from evaluation.ties import race_tie
+            scores = {self.store.get(e).diff["model"]: self._result(e)["metrics"][f"oot_dev_{pm}"] for e in ok}
+            tie = race_tie(scores, (self.p.get("oot_power") or {}).get("mde", 0.0), self.cfg["race"]["tie_preference"])
+            self.p["race_tie"] = tie
+            self.events.append("race_tie", tie)
+        self.p["current_node"] = f"{self.task_id}_race_{self.p['race_tie']['recommended']}" if ok else None
         try:
-            from features.factory import load_templates
-            self.p["templates"] = list(load_templates(self.spec.dataset, self.cfg))
+            from features.factory import load_templates, supported
+            self.p["templates"] = [k for k, t in load_templates(self.spec.dataset, self.cfg).items() if supported(t)]
         except FileNotFoundError:
             self.p["templates"] = []
+        kh, tr = load_knowhow(self.spec.dataset, self.cfg), DataAccess(self.spec.dataset, str(self.art)).load("train")
+        bad = set(scan_features(tr, self.p["all_features"], kh, self.cfg, self.spec.dataset)["unavailable_fields"])
+        self.p["code_inputs"] = [f for f in self.p["all_features"] if f not in bad]      # run_code 能看到的输入（预测时点可得）
         return S.DECIDE
 
+    def _race_core(self) -> list[str]:
+        """赛跑必跑的核心模型：race.models 里约束允许的；约束只允许别的模型时（如高可解释性只剩评分卡）用约束允许的全部。"""
+        allowed = allowed_models(self.spec)
+        return [m for m in allowed if m in self.cfg["race"]["models"]] or allowed
+
+    def _code_inputs(self) -> list[str]:
+        return [f for f in self.p.get("code_inputs", []) if f not in self.p["quarantined"]]
+
     def _registered_features(self, res):
-        """按来源分：模板产出（可信，走正常筛选）vs run_code 产出（一律可疑，见 tools/run_code.py）。"""
+        """按来源分：模板产出、带输入白名单的 run_code 产出（可信，走正常筛选）vs 没有白名单的旧 run_code 产出（可疑）。"""
         fs = res["config"].get("feature_sets") or []
         if not fs:
             return set(), set()
@@ -268,18 +338,18 @@ class Orchestrator:
         known, suspect = set(), set()
         for x in fs:
             m = reg.get(x)
-            (suspect if m["source"] == "run_code" else known).update(m["kept"])
+            (suspect if m["source"] == "run_code" and not (m["defs"] or [{}])[0].get("inputs") else known).update(m["kept"])
         return known, suspect
 
-    def _evaluate_result(self, res, base_result):
+    def _evaluate_result(self, res, base_result, guard=True):
         kh = load_knowhow(self.spec.dataset, self.cfg)
         tr = DataAccess(self.spec.dataset, str(self.art)).load("train")
         feats = res["config"]["features"]
-        scan = {} if self.cfg.get("ablation", {}).get("no_guardrail") else scan_features(tr, feats, kh, self.cfg, self.spec.dataset, *self._registered_features(res))
+        scan = scan_features(tr, feats, kh, self.cfg, self.spec.dataset, *self._registered_features(res))
         try:
             out = self.evaluator.evaluate(res, base_result, scan, history_verdicts=self.p["history_verdicts"],
                                           remaining_budget_frac=bud.remaining_frac(self.p["budget"]),
-                                          handled_leaks=self.p["handled_leaks"])
+                                          handled_leaks=self.p["handled_leaks"], guard=guard)
         except OOTBudgetExhausted:
             out = {"verdict": "INCONCLUSIVE", "diagnosis_codes": ["OOT_BUDGET_EXHAUSTED"], "diagnosis_details": {}}
         v = out["verdict"]
@@ -290,11 +360,36 @@ class Orchestrator:
         self.events.append("evaluated", {"verdict": out["verdict"], "codes": out["codes"],
                                          "guardrail_failures": out.get("guardrail_failures", []),
                                          "model": res["config"].get("model"), "fidelity": res["config"].get("fidelity"),
-                                         "metrics": {k: m.get(k) for k in ("valid_auc", "oot_dev_auc", "score_psi")},
+                                         "metrics": {k: v for k, v in m.items() if k.startswith(("valid_", "oot_dev_")) or k == "score_psi"},
                                          "baseline": base_result["exp_id"] if base_result else None,
                                          "compare": {k: cmp.get(k) for k in ("delta", "ci_low", "ci_high", "alpha", "significant", "k")} if cmp else None},
                            exp_id=res.get("exp_id"))
         return out
+
+    def _race_promotion(self):
+        """赛跑后的第一次升全量由代码做：升打平规则推荐的那个，不调 LLM（v7–v9：第 1 轮都是升赛跑模型）。"""
+        p, tie = self.p, self.p.get("race_tie")
+        if p["best_exp_id"] or not tie or p.get("race_promoted") or not self.cfg["race"]["rule_first_promotion"]:
+            return None
+        p["race_promoted"] = True
+        others = [m for m in tie["tied"] if m != tie["recommended"]]
+        why = (f"赛跑打平：{'、'.join(tie['tied'])} 与最优差距小于 MDE {tie['mde']:.4f}，效果相当；按偏好顺序推荐 {tie['recommended']}"
+               if others else f"赛跑中 {tie['recommended']} 明显领先（其余模型差距 ≥ MDE {tie['mde']:.4f}）")
+        d = Decision(action="PROMOTE_FIDELITY", params={"exp_id": f"{self.task_id}_race_{tie['recommended']}"},
+                     hypothesis=f"{why}；升到全量复验，得到第一个最终模型", expected_gain="第一个全保真最终模型",
+                     est_cost=EstCost(), rationale="规则：赛跑后第一次升全量按打平规则选模型（evaluation/ties.py）",
+                     user_note=(f"几个模型效果相当，先选 {tie['recommended']} 用全部数据训练，得到第一个可用的模型" if others
+                                else f"{tie['recommended']} 明显最好，先用全部数据训练它，得到第一个可用的模型" if len(tie["models"]) > 1
+                                else f"先用全部数据训练 {tie['recommended']}，得到第一个可用的模型"))
+        self.events.append("decision", {"attempt": 0, "decision": d.model_dump(mode="json"), "by": "rule"})
+        return d, 0
+
+    def _llm_decide(self):
+        p = self.p
+        n_rows = len(DataAccess(self.spec.dataset, str(self.art)).load("train"))
+        ctx = build_context(self.store, p, self.cfg, self.spec, self.evaluator.budget, self._remaining(), model_profiles(self.spec))
+        v = Validator(self.cfg, self.spec, self.store, p, self._remaining(), n_rows)
+        return decide(self.llm, ctx, v, self.cfg, on_event=lambda t, pl: self.events.append(t, pl))
 
     def _decide(self):
         p = self.p
@@ -307,13 +402,15 @@ class Orchestrator:
             self.events.append("auto_quarantine", p["pending_leaks"])
             p["pending_leaks"] = {}
         recs = {r.exp_id: r for r in self.store.all(self.task_id)}
-        n_rows = len(DataAccess(self.spec.dataset, str(self.art)).load("train"))
-        ctx = build_context(self.store, p, self.cfg, self.spec, self.evaluator.budget, self._remaining(), allowed_models(self.spec))
-        v = Validator(self.cfg, self.spec, self.store, p, self._remaining(), n_rows)
         try:
-            d, toks = decide(self.llm, ctx, v, self.cfg, on_event=lambda t, pl: self.events.append(t, pl))
+            d, toks = self._race_promotion() or self._llm_decide()
         except DecideFailed as e:
             p["await"] = {"reason": "decide_failed", "errors": e.errors}
+            if p["best_exp_id"]:              # 已有最终模型：带着原因正常收尾，不丢成绩（v2 评测 lending_club s2）
+                self.events.append("decide_failed", p["await"])
+                p["await"], p["stop_reason"] = None, "DECIDE_FAILED"
+                self.events.append("stop", {"reason": "DECIDE_FAILED"})
+                return S.FINAL_GATE
             if self.spec.autonomy == "L0":
                 self.events.append("decide_failed", p["await"])
                 return S.FAILED
@@ -344,12 +441,15 @@ class Orchestrator:
             try:
                 if pd["config"]["code"]:
                     from tools.run_code import RunCodeError, run_code
-                    gen = run_code(pd["config"]["code"], self.spec.dataset, self.cfg)
+                    gen = run_code(pd["config"]["code"], self.spec.dataset, self.cfg, self._code_inputs())
                 else:
                     from tools.generate_features import generate_features
                     gen = generate_features(pd["config"]["template_id"], self.spec.dataset, self.cfg)
             except Exception as e:
                 pd["result"] = {"status": "EXPAND_FAILED", "error": f"{type(e).__name__}: {str(e)[:400]}"}
+                return S.RECORD
+            if not gen["kept"]:                # 一个都没留下：不训练（结果与父节点相同，判定没有意义），把筛掉的原因回灌（v5 评测 home_credit）
+                pd["result"] = {"status": "EXPAND_EMPTY", "error": f"生成的特征全部被筛掉，没有可加的特征：{json.dumps(gen.get('dropped', {}), ensure_ascii=False)[:400]}"}
                 return S.RECORD
             pd["expand"] = {"feature_set_id": gen["feature_set_id"], "kept": gen["kept"],
                             "leak_suspect": list(gen.get("leak_suspect", {}))}
@@ -364,22 +464,38 @@ class Orchestrator:
             self.p["current_node"] = pd["parent"]
         if pd["kind"] == "investigate":
             node = self.store.get(self.p["current_node"])
-            q = pd["decision"]["params"]["question"]
-            pd["investigation"] = {q: investigate(self.spec.dataset, self.cfg, q, node.config["features"])}
+            q, want = pd["decision"]["params"]["question"], pd["decision"]["params"].get("features")
+            fs = [f for f in want if f in node.config["features"]] if want else node.config["features"]   # 只能看当前特征集里的
+            pd["investigation"] = {q: investigate(self.spec.dataset, self.cfg, q, fs or node.config["features"])}
         return S.RECORD
 
     def _evaluate(self):
         pd = self.p["pending"]
         res = pd["result"]
-        best = self._result(self.p["best_exp_id"]) if self.p["best_exp_id"] else None
-        pd["eval"] = self._evaluate_result(res, best)
+        base = self.p["best_exp_id"]
+        if base and res.get("fidelity") == "low" and self._result(base)["fidelity"] == "full":
+            base = self._low_counterpart(base)       # 同等保真度比较：低保真候选比全量最优，结构上必输（v3 评测 lending_club）
+        pd["eval"] = self._evaluate_result(res, self._result(base) if base else None)
         return S.RECORD
+
+    def _low_counterpart(self, exp_id):
+        """全量实验对应的低保真版本：沿父链找到第一个低保真实验，或 PROMOTE_FIDELITY 升上来的那个源实验。"""
+        r = self.store.get(exp_id)
+        while r is not None:
+            if r.fidelity == "low":
+                return r.exp_id
+            if r.action_type == "PROMOTE_FIDELITY":
+                return r.diff["exp_id"]
+            r = self.store.get(r.parent_exp_id) if r.parent_exp_id else None
+        return exp_id
 
     def _record(self):
         p, pd = self.p, self.p["pending"]
         d, res, ev = pd["decision"], pd.get("result"), pd.get("eval")
         ok = res is not None and res.get("status") == "OK"
+        worth = False
         verdict = ev["verdict"] if ok else "NONE"
+        p["last_failure"] = None if ok or not res else res.get("error")        # 失败原因回灌给下一轮 DECIDE（否则 LLM 不知道怎么改）
         codes = ev["codes"] if ok else ([res["status"]] if res else [])
         diff = dict(d["params"])
         if pd.get("expand"):
@@ -394,16 +510,28 @@ class Orchestrator:
         if ok:
             bud.spend(p["budget"], cpu_minutes=res["cost"]["wall_minutes"] * self.cfg["inner_loop"]["n_threads"],
                       wall_minutes=res["cost"]["wall_minutes"])
-            p["history_verdicts"].append(verdict)
+            mark = history_mark(verdict, res.get("fidelity"), (ev.get("compare") or {}).get("delta"), self._min_up())
+            p["history_verdicts"].append(mark)
+            delta = (ev.get("compare") or {}).get("delta")
+            worth = bool(p["best_exp_id"] and res.get("fidelity") == "low" and mark in ("PROMISING", "INCONCLUSIVE_UP")
+                         and delta is not None and delta >= self._min_up())    # 差距 < MDE 是打平，升全量大概率仍不确定
+            if worth:
+                p.setdefault("promote_hint", []).append(pd["exp_id"])       # 值得升全量复验（evaluation/guardrails.promote_candidates）
             p["last_codes"] = codes
             if ev["leaks"]:
                 p["pending_leaks"] = ev["leaks"]
             if verdict == "ACCEPT":
                 p["best_exp_id"] = p["current_node"] = pd["exp_id"]
         p["round_no"] += 1
-        self.events.append("recorded", {"verdict": verdict, "codes": codes, "action": d["action"]}, exp_id=pd["exp_id"])
+        self.events.append("recorded", {"verdict": verdict, "codes": codes, "action": d["action"], **({"mark": mark, "worth": worth} if ok else {}),
+                                        **({"error": p["last_failure"]} if p["last_failure"] else {})}, exp_id=pd["exp_id"])
         p["pending"] = None
         return S.STOP_CHECK
+
+    def _min_up(self):
+        """低保真"不确定但更高"至少要高这么多，才不计入停止计数、才提示升全量（evaluation/stop.history_mark）。"""
+        pw = self.p.get("oot_power")
+        return self.cfg["evaluator"]["inconclusive_up_mde_frac"] * pw["mde"] if pw else 0.0
 
     def _stop_check(self):
         p = self.p
@@ -411,7 +539,7 @@ class Orchestrator:
         reason = stop_check(cfg=self.cfg, oot_budget=self.evaluator.budget, round_no=p["round_no"],
                             max_rounds=self.cfg["run"]["max_rounds"], remaining=self._remaining(),
                             history_verdicts=p["history_verdicts"],
-                            best_oot_auc=best["metrics"]["oot_dev_auc"] if best else None,
+                            best_score=best["metrics"][f"oot_dev_{primary(self.cfg)}"] if best else None,
                             target_value=self.spec.target_value)
         if reason:
             p["stop_reason"] = reason

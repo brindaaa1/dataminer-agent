@@ -1,0 +1,78 @@
+{
+ "new": "v10b",
+ "old": "v10a",
+ "tier": "fast",
+ "noise_calibrated": true,
+ "table": [
+  {
+   "dataset": "lending_club",
+   "metric": "holdout",
+   "delta": -0.0052,
+   "new": 0.6555,
+   "old": 0.6606,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v10b_lending_club_s1"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "delta_b1",
+   "delta": -0.0052,
+   "new": -0.0031,
+   "old": 0.002,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v10b_lending_club_s1"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "wasted_rate",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v10b_lending_club_s0"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "rejected_decisions",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v10b_lending_club_s0"
+  },
+  {
+   "dataset": "lending_club",
+   "metric": "fe_in_final",
+   "delta": 0.0,
+   "new": 0.0,
+   "old": 0.0,
+   "n": 2,
+   "verdict": "same",
+   "worst_task": "v10b_lending_club_s0"
+  }
+ ],
+ "flags": [],
+ "cost": [
+  {
+   "dataset": "lending_club",
+   "key": "wall_sec",
+   "new": 235.8,
+   "old": 281.1,
+   "ratio": 0.84,
+   "threshold": 1.33
+  },
+  {
+   "dataset": "lending_club",
+   "key": "cost_usd",
+   "new": 0.0088,
+   "old": 0.0086,
+   "ratio": 1.03,
+   "threshold": 1.3
+  }
+ ],
+ "conclusion": "无退步"
+}

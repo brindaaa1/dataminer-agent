@@ -152,3 +152,23 @@ def test_orchestrator_emits_llm_call_and_evaluated(toy_cfg):
     assert s["final"] == o.p["final"] and t[-1]["kind"] == "finale"      # holdout 验收结果进了收尾段
     assert recorded == [e["exp_id"] for e in evs if e["type"] == "recorded"]
     assert all(x["decision"] for x in rounds)
+
+
+def test_load_trials_reads_complete_and_pruned(tmp_path):
+    import optuna
+    from runtime.trace import load_trials
+    db = tmp_path / "optuna.db"
+    st_ = optuna.create_study(study_name="t_e01", storage=f"sqlite:///{db}", direction="maximize")
+    st_.optimize(lambda t: t.suggest_float("x", 0, 1), n_trials=3)
+    t = st_.ask()
+    st_.tell(t, state=optuna.trial.TrialState.PRUNED)
+    out = load_trials(str(db), ["t_e01", "t_missing"])
+    assert set(out) == {"t_e01"}
+    assert [r["state"] for r in out["t_e01"]] == ["COMPLETE"] * 3 + ["PRUNED"]
+    assert out["t_e01"][0]["n"] == 0 and "x" in out["t_e01"][0]["params"]
+
+
+def test_orchestrator_logs_locked_metric(toy_cfg):
+    o = Orchestrator(toy_spec(toy_cfg, autonomy="L0"), toy_cfg, PolicyMockLLM(), None, "sl")
+    o.run(max_steps=2)
+    assert o.events.query("spec_locked")[0]["payload"]["metric"]["primary"] == "auc"

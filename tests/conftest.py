@@ -60,3 +60,12 @@ def toy_spec(cfg, **kw):
 @pytest.fixture
 def toy_cfg(tmp_path):
     return make_toy(tmp_path)
+
+
+@pytest.fixture
+def eval_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "")
+    import eval.suite.runner as R
+    monkeypatch.setattr(R, "RUNS", tmp_path / "runs")
+    monkeypatch.setattr(R, "SETTINGS", {**R.SETTINGS, "max_rounds": 1, "low_trials": 3, "full_trials": 3})
+    return R

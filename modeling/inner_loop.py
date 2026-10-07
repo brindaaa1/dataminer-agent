@@ -1,15 +1,16 @@
 """内循环：一次 run_experiment = 一个完整的 Optuna study（目标函数只看 valid，OOT-dev 只在 study 结束后评估）。"""
 import json
 import time
+import zlib
 from pathlib import Path
 
 import numpy as np
 import optuna
-from sklearn.metrics import roc_auc_score
 
 from data.access import DataAccess
 from data.knowhow import load_knowhow
 from evaluation.guardrails import psi
+from evaluation.metrics import METRICS, all_metrics, primary
 from features.registry import Registry
 from modeling.monotone import constraints_for
 from modeling.prep import prepare
@@ -18,9 +19,10 @@ from modeling.zoo import ZOO, sample_params
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def ks(y, p):
-    from scipy.stats import ks_2samp
-    return float(ks_2samp(p[y == 1], p[y == 0]).statistic)
+def effective_frac(fid: dict, n_rows: int) -> float:
+    """低保真抽样比例 = max(sample_frac, min_rows / 训练行数)，最多 1。小数据按比例抽只剩几千行，
+    同一模型的分数随采样种子差 0.01（v7 A/A 诊断：hotel 2.1 万行 × 30%）。"""
+    return min(1.0, max(fid["sample_frac"], fid.get("min_rows", 0) / n_rows))
 
 
 def clip_to_space(params: dict, space: dict) -> dict:
@@ -48,9 +50,10 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
     if feature_sets:
         reg = Registry(cfg)
         tr, va, oo = (reg.attach(f, feature_sets, s_) for f, s_ in ((tr, "train"), (va, "valid"), (oo, "oot_dev")))
-    if fid["sample_frac"] < 1:
-        tr = tr.sample(frac=fid["sample_frac"], random_state=seed)
-        va = va.sample(frac=fid["sample_frac"], random_state=seed)
+    frac = effective_frac(fid, len(tr))
+    if frac < 1:
+        tr = tr.sample(frac=frac, random_state=seed)
+        va = va.sample(frac=frac, random_state=seed)
     Xtr, cats = prepare(tr, date_fields, None, dfmt)
     Xva, _ = prepare(va, date_fields, cats, dfmt)
     Xoo, _ = prepare(oo, date_fields, cats, dfmt)
@@ -59,6 +62,7 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
     ytr, yva, yoo = tr["_label"], va["_label"], oo["_label"]
 
     Spec = ZOO[model]
+    pm = primary(cfg)
     space = space or Spec.default_space
     mono, mono_rep = None, None
     if monotone:
@@ -68,7 +72,7 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
     storage = f"sqlite:///{art / 'optuna.db'}"
     study = optuna.create_study(
         study_name=exp_id, storage=storage, direction="maximize", load_if_exists=resume,
-        sampler=optuna.samplers.TPESampler(seed=seed),
+        sampler=optuna.samplers.TPESampler(seed=seed + zlib.crc32(exp_id.encode()) % 100_000),   # 按实验错开：同种子同空间时 TUNE 会逐点重放父实验（v4 评测 lending_club）
         pruner=optuna.pruners.MedianPruner(n_startup_trials=cfg["inner_loop"]["pruner_startup_trials"]))
     n_warm = enqueue_warm_start(study, warm_start or [], space, n_trials, cfg)
 
@@ -86,7 +90,7 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
                         raise optuna.TrialPruned()
             cbs = [pruning_cb]
         m = Spec(params, cfg, seed, mono).fit(Xtr, ytr, Xva, yva, fid["early_stopping_rounds"], cbs)
-        return roc_auc_score(yva, m.predict(Xva))
+        return METRICS[pm].fn(yva.values, m.predict(Xva))          # 目标函数：valid 上的主指标
 
     remaining = n_trials - len([t for t in study.trials if t.state.is_finished()])
     if remaining > 0:
@@ -94,9 +98,9 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
     best = study.best_trial
     m = Spec(best.params, cfg, seed, mono).fit(Xtr, ytr, Xva, yva, fid["early_stopping_rounds"])
     p_tr, p_va, p_oo = m.predict(Xtr), m.predict(Xva), m.predict(Xoo)
-    metrics = {"train_auc": roc_auc_score(ytr, p_tr), "valid_auc": roc_auc_score(yva, p_va),
-               "oot_dev_auc": roc_auc_score(yoo, p_oo), "oot_dev_ks": ks(yoo.values, p_oo)}
-    metrics["gap"] = metrics["valid_auc"] - metrics["oot_dev_auc"]
+    metrics = {f"{seg}_{k}": v for seg, (y_, p_) in {"train": (ytr, p_tr), "valid": (yva, p_va), "oot_dev": (yoo, p_oo)}.items()
+               for k, v in all_metrics(y_.values, p_).items()}
+    metrics["gap"] = metrics[f"valid_{pm}"] - metrics[f"oot_dev_{pm}"]
     metrics["score_psi"] = psi(p_va, p_oo, cfg["evaluator"]["psi_bins"])
     out = art / "experiments" / exp_id
     out.mkdir(parents=True, exist_ok=True)
@@ -105,7 +109,7 @@ def run_study(exp_id, dataset, model, cfg, features=None, space=None, fidelity="
     res = {"exp_id": exp_id, "model": model, "fidelity": fidelity, "n_trials": len(study.trials),
            "n_pruned": sum(t.state == optuna.trial.TrialState.PRUNED for t in study.trials),
            "n_warm_start": n_warm, "best_params": best.params, "best_iter": getattr(m, "best_iter", None), "metrics": metrics,
-           "cost": {"wall_minutes": (time.time() - t0) / 60}, "n_features": Xtr.shape[1],
+           "cost": {"wall_minutes": (time.time() - t0) / 60}, "n_features": Xtr.shape[1], "n_rows": len(Xtr),
            "config": {"model": model, "features": list(Xtr.columns), "space": space, "fidelity": fidelity,
                       "n_trials": n_trials, "seed": seed, "feature_sets": feature_sets or [],
                       **({"monotone": True} if monotone else {})},
@@ -143,9 +147,10 @@ def fit_model(dataset, cfg, config: dict, best_params: dict):
     reg = Registry(cfg) if fsets else None
     if fsets:
         tr, va = reg.attach(tr, fsets, "train"), reg.attach(va, fsets, "valid")
-    if fid["sample_frac"] < 1:
-        tr = tr.sample(frac=fid["sample_frac"], random_state=config["seed"])
-        va = va.sample(frac=fid["sample_frac"], random_state=config["seed"])
+    frac = effective_frac(fid, len(tr))
+    if frac < 1:
+        tr = tr.sample(frac=frac, random_state=config["seed"])
+        va = va.sample(frac=frac, random_state=config["seed"])
     feats = config["features"]
     Xtr, cats = prepare(tr, date_fields, None, dfmt)
     Xva, _ = prepare(va, date_fields, cats, dfmt)

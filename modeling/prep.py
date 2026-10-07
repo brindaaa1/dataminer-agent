@@ -1,6 +1,8 @@
 """特征预处理：date 类型字段（从 data_dictionary 的 type: date 读取）转为"距观察时间的月数"，object 转 category。"""
 import pandas as pd
 
+from data.access import numpy_types
+
 META = ("_row_id", "_label", "_split_time", "_obs_time")
 
 
@@ -19,6 +21,7 @@ def prepare(df: pd.DataFrame, date_fields: list[str], cats: dict | None = None, 
         if pd.api.types.is_datetime64_any_dtype(X[c]):
             ref = df["_obs_time"] if "_obs_time" in df else pd.Timestamp("1970-01-01")
             X[c] = (X[c] - ref).dt.days.astype(float)
+    numpy_types(X)                                            # 特征集挂上来的列也可能是可空类型
     fit = cats is None
     cats = {} if fit else cats
     for c in X.columns:

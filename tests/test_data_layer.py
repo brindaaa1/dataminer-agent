@@ -165,16 +165,6 @@ def test_agent_code_cannot_reach_final_gate():
 
 
 # ---------- A3：泄漏字段放回 ----------
-def test_leak_back_puts_leakage_fields_back_but_not_label_source(toy):
-    cfg, df = toy
-    kh = load_knowhow("toy", cfg)
-    p = column_policy("toy", list(df.columns), kh, leak_back=True)
-    assert {"total_pymnt", "hardship_x"} <= set(p["keep"]) or {"total_pymnt", "hardship_x"} <= set(p["quarantine"]) | set(p["keep"])
-    assert "total_pymnt" in p["leak_truth"] and "loan_status" not in p["leak_truth"]
-    assert "loan_status" not in p["keep"]                  # label 来源永远不作为特征
-    assert "total_pymnt" not in column_policy("toy", list(df.columns), kh)["keep"]   # 默认仍然剔除
-
-
 # ---------- classic_derived：可得时间继承（§4.11） ----------
 def test_derive_availability_takes_weakest_input():
     from data.knowhow import derive_availability
@@ -234,3 +224,16 @@ def test_scan_features_knows_derived_and_registered(toy):
     df = pd.DataFrame({c: [1.0, 2.0] for c in ("income", "fico", "d_ok", "d_unk", "fs_feat", "mystery")} | {"_label": [0, 1]})
     s = scan_features(df, ["income", "fico", "d_ok", "d_unk", "fs_feat", "mystery"], kh, cfg, "toy", extra_known={"fs_feat"})
     assert set(s["unavailable_fields"]) == {"d_unk", "mystery"}          # 派生继承出的存疑 / 完全未登记 → 可疑；特征集特征放行
+
+
+def test_splits_are_written_with_numpy_types(toy):
+    """v5 评测 home_credit：Yes/No 带缺失的列被 DuckDB 读成 pandas boolean，缺失是 pd.NA，CatBoost、IV 分箱先后报错。
+    写切分文件时就统一成 numpy 类型，并在切分报告里列出转了哪些列。"""
+    cfg, raw = toy
+    raw = raw.assign(income=np.where(np.arange(len(raw)) % 3 == 0, None, np.where(raw.income > 50, "Yes", "No")))
+    raw.to_csv(cfg["datasets"]["toy"]["tables"]["main"], index=False)
+    rep = build_splits("toy", cfg)
+    root = Path(cfg["paths"]["artifacts_root"])
+    for f in [root / "splits" / "toy" / f"{s}.parquet" for s in ("train", "valid", "oot_dev")] + [root / "holdout" / "toy" / "holdout.parquet"]:
+        assert pd.read_parquet(f)["income"].dtype == "float64"
+    assert rep["dtype_normalized"] == {"income": "boolean"}

@@ -127,10 +127,10 @@ def test_second_similar_task_reuses_prior_and_lessons_become_active(tmp_path):
     b = _run(_shared(make_toy(tmp_path / "B", seed=1), db), "B")
     r = b.events.query("memory_retrieval")[0]["payload"]
     assert r["nearest"] == "A" and not r["cold_start"]
-    race = b._result("B_race_lgbm")
+    race = b._result(f"B_race_{b.p['prior']['model']}")                                     # 热启动参数注入到历史最优的同一种模型
     assert 0 < race["n_warm_start"] <= int(race["n_trials"] * CFG["inner_loop"]["warm_start_max_frac"])   # 跨任务 prior 注入，且 ≤10%
     ls = MemoryStore(db).lessons()
-    assert ls and all(l["status"] in ("CANDIDATE", "VALIDATED", "ACTIVE") for l in ls)
+    assert ls and all(l["status"] in ("CANDIDATE", "VALIDATED", "ACTIVE", "DEPRECATED") for l in ls)   # 两个任务结论不一致的会被作废
     assert any(l["status"] == "ACTIVE" and set(l["tasks"]) == {"A", "B"} for l in ls)      # 两个任务复现 → ACTIVE
 
 

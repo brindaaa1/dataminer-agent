@@ -8,7 +8,8 @@ from sklearn.metrics import roc_auc_score
 from data.access import DataAccess
 from evaluation.final_gate import FinalGate
 from features.registry import Registry
-from modeling.inner_loop import date_spec, ks
+from evaluation.metrics import ks
+from modeling.inner_loop import date_spec
 from modeling.prep import prepare
 
 

@@ -1,0 +1,924 @@
+{
+ "label": "v10c",
+ "tier": "fast",
+ "status": "done",
+ "settings": {
+  "max_rounds": 6,
+  "low_sample_frac": 0.3,
+  "low_trials": 10,
+  "full_trials": 20,
+  "split_seed": 42,
+  "autonomy": "L0",
+  "llm": "deepseek",
+  "scenario": {
+   "max_rounds": 5,
+   "n_rows": 20000,
+   "seed": 0
+  }
+ },
+ "git": {
+  "sha": "dbc6d942c5fc4b01dd4a0d2398fb7fe422b58dc4",
+  "dirty": true
+ },
+ "started": 1791284908.350513,
+ "finished": 1791289720.075378,
+ "wall_sec": 4180.3,
+ "cost_usd": 0.0475853784,
+ "datasets": {
+  "hotel_bookings": {
+   "baselines": {
+    "b0": {
+     "name": "b0_v10c_hotel_bookings",
+     "oot_dev_auc": 0.8194713660749873,
+     "oot_dev_ks": 0.48655786389548844,
+     "holdout_auc": 0.7760766872707171,
+     "wall_sec": 0.390275239944458,
+     "n_features": 27,
+     "best_iter": 309
+    },
+    "b1": {
+     "name": "b1_v10c_hotel_bookings",
+     "oot_dev_auc": 0.8251185508207242,
+     "oot_dev_ks": 0.5013719060379394,
+     "holdout_auc": 0.7832507146162748,
+     "wall_sec": 469.8965780735016,
+     "n_features": 27,
+     "best_estimator": "rf",
+     "time_budget": 469.7,
+     "best_config": {
+      "n_estimators": 439,
+      "max_features": 0.2030059336124158,
+      "max_leaves": 1990,
+      "criterion": "entropy"
+     }
+    }
+   },
+   "runs": [
+    {
+     "seed": 0,
+     "status": "ok",
+     "error": null,
+     "final_model": "catboost",
+     "holdout": 0.7921598100257045,
+     "oot_dev": 0.8300280210007848,
+     "overfit": false,
+     "stop_reason": "MAX_ROUNDS",
+     "n_rounds": 6,
+     "wall_sec": 469.7,
+     "cost_usd": 0.007172821600000001,
+     "task_id": "v10c_hotel_bookings_s0",
+     "process": {
+      "rounds": {
+       "value": 6,
+       "max": 6,
+       "stop_reason": "MAX_ROUNDS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.167,
+       "n": 1,
+       "evidence": [
+        "v10c_hotel_bookings_s0_e04"
+       ]
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": 1.0,
+       "worth": [
+        "v10c_hotel_bookings_s0_e05"
+       ],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": 0.5,
+       "evidence": [
+        "v10c_hotel_bookings_s0_e02",
+        "v10c_hotel_bookings_s0_e06"
+       ]
+      },
+      "final_lineage": {
+       "value": "赛跑 catboost → 升全量",
+       "evidence": [
+        "v10c_hotel_bookings_s0_race_catboost",
+        "v10c_hotel_bookings_s0_e02"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 2,
+       "kept": 1,
+       "promising": 1,
+       "promoted": 1,
+       "accepted": 0,
+       "evidence": [
+        "v10c_hotel_bookings_s0_e04",
+        "v10c_hotel_bookings_s0_e05"
+       ]
+      },
+      "recovery": {
+       "value": 1.0,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 6,
+       "last_alpha": 0.017909852389190756,
+       "mde": 0.0083,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.007172821600000001,
+       "wall_sec": 469.7,
+       "tokens": 39527,
+       "sec_per_round": 78.3,
+       "evidence": []
+      }
+     }
+    },
+    {
+     "seed": 1,
+     "status": "ok",
+     "error": null,
+     "final_model": "catboost",
+     "holdout": 0.7955629661132,
+     "oot_dev": 0.830205135510604,
+     "overfit": false,
+     "stop_reason": "MAX_ROUNDS",
+     "n_rounds": 6,
+     "wall_sec": 638.5,
+     "cost_usd": 0.007510501600000001,
+     "task_id": "v10c_hotel_bookings_s1",
+     "process": {
+      "rounds": {
+       "value": 6,
+       "max": 6,
+       "stop_reason": "MAX_ROUNDS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.167,
+       "n": 1,
+       "evidence": [
+        "v10c_hotel_bookings_s1_e04"
+       ]
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": 1.0,
+       "worth": [
+        "v10c_hotel_bookings_s1_e02",
+        "v10c_hotel_bookings_s1_e05"
+       ],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": 0.0,
+       "evidence": [
+        "v10c_hotel_bookings_s1_e03",
+        "v10c_hotel_bookings_s1_e06"
+       ]
+      },
+      "final_lineage": {
+       "value": "赛跑 catboost → 升全量",
+       "evidence": [
+        "v10c_hotel_bookings_s1_race_catboost",
+        "v10c_hotel_bookings_s1_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 2,
+       "kept": 1,
+       "promising": 1,
+       "promoted": 1,
+       "accepted": 0,
+       "evidence": [
+        "v10c_hotel_bookings_s1_e04",
+        "v10c_hotel_bookings_s1_e05"
+       ]
+      },
+      "recovery": {
+       "value": 1.0,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 6,
+       "last_alpha": 0.017909852389190756,
+       "mde": 0.0083,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.007510501600000001,
+       "wall_sec": 638.5,
+       "tokens": 41514,
+       "sec_per_round": 106.4,
+       "evidence": []
+      }
+     }
+    }
+   ],
+   "summary": {
+    "n": 2,
+    "n_ok": 2,
+    "holdout_mean": 0.7938613880694523,
+    "delta_b1_mean": 0.0106106734531774,
+    "rounds_mean": 6.0,
+    "fe_in_final": "0/2",
+    "wall_sec": 1108.2,
+    "cost_usd": 0.014683323200000003,
+    "worst_task": "v10c_hotel_bookings_s0"
+   }
+  },
+  "lending_club": {
+   "baselines": {
+    "b0": {
+     "name": "b0_v10c_lending_club",
+     "oot_dev_auc": 0.6410340843621717,
+     "oot_dev_ks": 0.2086977425847883,
+     "holdout_auc": 0.6473875093262106,
+     "wall_sec": 0.47083210945129395,
+     "n_features": 35,
+     "best_iter": 32
+    },
+    "b1": {
+     "name": "b1_v10c_lending_club",
+     "oot_dev_auc": 0.6432516652598402,
+     "oot_dev_ks": 0.21032476560623903,
+     "holdout_auc": 0.6537100107114766,
+     "wall_sec": 133.36991167068481,
+     "n_features": 35,
+     "best_estimator": "xgboost",
+     "time_budget": 133.4,
+     "best_config": {
+      "n_estimators": 43,
+      "max_leaves": 7,
+      "min_child_weight": 0.001,
+      "learning_rate": 0.35985107480466605,
+      "subsample": 0.9690814996071221,
+      "colsample_bylevel": 0.8691695631741286,
+      "colsample_bytree": 0.9730804979112456,
+      "reg_alpha": 0.0017127533732001956,
+      "reg_lambda": 0.8352588154736797
+     }
+    }
+   },
+   "runs": [
+    {
+     "seed": 0,
+     "status": "ok",
+     "error": null,
+     "final_model": "lgbm",
+     "holdout": 0.6553627128600508,
+     "oot_dev": 0.6548889534757887,
+     "overfit": false,
+     "stop_reason": "NO_PROGRESS",
+     "n_rounds": 4,
+     "wall_sec": 133.4,
+     "cost_usd": 0.004812399200000001,
+     "task_id": "v10c_lending_club_s0",
+     "process": {
+      "rounds": {
+       "value": 4,
+       "max": 6,
+       "stop_reason": "NO_PROGRESS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.0,
+       "n": 0,
+       "evidence": []
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": null,
+       "worth": [],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": null,
+       "evidence": []
+      },
+      "final_lineage": {
+       "value": "赛跑 lgbm → 升全量",
+       "evidence": [
+        "v10c_lending_club_s0_race_lgbm",
+        "v10c_lending_club_s0_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 2,
+       "kept": 2,
+       "promising": 0,
+       "promoted": 0,
+       "accepted": 0,
+       "evidence": [
+        "v10c_lending_club_s0_e03",
+        "v10c_lending_club_s0_e04"
+       ]
+      },
+      "recovery": {
+       "value": 1.0,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 5,
+       "last_alpha": 0.01916121466686275,
+       "mde": 0.0099,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.004812399200000001,
+       "wall_sec": 133.4,
+       "tokens": 26308,
+       "sec_per_round": 33.4,
+       "evidence": []
+      }
+     }
+    },
+    {
+     "seed": 1,
+     "status": "ok",
+     "error": null,
+     "final_model": "catboost",
+     "holdout": 0.6595568622026589,
+     "oot_dev": 0.6580099951662889,
+     "overfit": false,
+     "stop_reason": "NO_PROGRESS",
+     "n_rounds": 4,
+     "wall_sec": 2374.5,
+     "cost_usd": 0.0039574192,
+     "task_id": "v10c_lending_club_s1",
+     "process": {
+      "rounds": {
+       "value": 4,
+       "max": 6,
+       "stop_reason": "NO_PROGRESS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.0,
+       "n": 0,
+       "evidence": []
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": null,
+       "worth": [],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": null,
+       "evidence": []
+      },
+      "final_lineage": {
+       "value": "赛跑 catboost → 升全量",
+       "evidence": [
+        "v10c_lending_club_s1_race_catboost",
+        "v10c_lending_club_s1_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 1,
+       "kept": 1,
+       "promising": 0,
+       "promoted": 0,
+       "accepted": 0,
+       "evidence": [
+        "v10c_lending_club_s1_e03"
+       ]
+      },
+      "recovery": {
+       "value": null,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 5,
+       "last_alpha": 0.01916121466686275,
+       "mde": 0.0099,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.0039574192,
+       "wall_sec": 2374.5,
+       "tokens": 23172,
+       "sec_per_round": 593.6,
+       "evidence": []
+      }
+     }
+    }
+   ],
+   "summary": {
+    "n": 2,
+    "n_ok": 2,
+    "holdout_mean": 0.6574597875313548,
+    "delta_b1_mean": 0.0037497768198782033,
+    "rounds_mean": 4.0,
+    "fe_in_final": "0/2",
+    "wall_sec": 2507.9,
+    "cost_usd": 0.0087698184,
+    "worst_task": "v10c_lending_club_s0"
+   }
+  }
+ },
+ "scenarios": [
+  {
+   "scenario": "leak",
+   "base": "lending_club",
+   "task_id": "v10c_scn_leak_lending_club",
+   "status": "ok",
+   "error": null,
+   "final_model": "lgbm",
+   "trace_id": "a206ce6917dca69d0fd396cf74239d39",
+   "n_rounds": 4,
+   "n_rejected": 0,
+   "n_llm_errors": 0,
+   "stop_reason": "NO_PROGRESS",
+   "final_exp": "v10c_scn_leak_lending_club_e01",
+   "holdout": 0.616766221358034,
+   "oot_dev": 0.6254020055585043,
+   "overfit": false,
+   "no_final_model": false,
+   "wall_sec": 128.8,
+   "usage": {
+    "input_cache_hit": 3964,
+    "input_cache_miss": 11479,
+    "output": 12111,
+    "reasoning": 8443,
+    "calls": 6
+   },
+   "cost_usd": 0.0050092392000000005,
+   "process": {
+    "rounds": {
+     "value": 4,
+     "max": 5,
+     "stop_reason": "NO_PROGRESS",
+     "evidence": []
+    },
+    "wasted_rounds": {
+     "value": 0.0,
+     "n": 0,
+     "evidence": []
+    },
+    "rejected_decisions": {
+     "value": 0,
+     "by_kind": {},
+     "evidence": []
+    },
+    "decide_failed": {
+     "value": false,
+     "rounds_lost": 0,
+     "evidence": []
+    },
+    "upgrade_hit_rate": {
+     "value": null,
+     "worth": [],
+     "unreachable": [],
+     "evidence": []
+    },
+    "upgrade_success_rate": {
+     "value": null,
+     "evidence": []
+    },
+    "final_lineage": {
+     "value": "赛跑 lgbm → 升全量",
+     "evidence": [
+      "v10c_scn_leak_lending_club_race_lgbm",
+      "v10c_scn_leak_lending_club_e01"
+     ]
+    },
+    "fe_funnel": {
+     "value": false,
+     "attempts": 1,
+     "kept": 1,
+     "promising": 0,
+     "promoted": 0,
+     "accepted": 0,
+     "evidence": [
+      "v10c_scn_leak_lending_club_e04"
+     ]
+    },
+    "recovery": {
+     "value": 1.0,
+     "evidence": []
+    },
+    "human": {
+     "value": 0,
+     "confirmed": 0,
+     "evidence": []
+    },
+    "oot": {
+     "value": 5,
+     "last_alpha": 0.01916121466686275,
+     "mde": 0.0091,
+     "underpowered": false,
+     "evidence": []
+    },
+    "cost": {
+     "value": 0.0050092392000000005,
+     "wall_sec": 128.8,
+     "tokens": 27554,
+     "sec_per_round": 32.2,
+     "evidence": []
+    }
+   },
+   "passed": true,
+   "reason": "泄漏列 acct_review_score 被识别并隔离，没有进入被采纳的实验，holdout 0.6168 未超过 B1 + 0.05",
+   "evidence": [
+    15
+   ]
+  },
+  {
+   "scenario": "missing_spec",
+   "base": "lending_club",
+   "task_id": "v10c_scn_missing_spec_lending_club",
+   "status": "ok",
+   "error": null,
+   "final_model": "lgbm",
+   "trace_id": "81852eb89b109710dac03836daf3ed57",
+   "n_rounds": 5,
+   "n_rejected": 0,
+   "n_llm_errors": 0,
+   "stop_reason": "MAX_ROUNDS",
+   "final_exp": "v10c_scn_missing_spec_lending_club_e01",
+   "holdout": 0.629547213622291,
+   "oot_dev": 0.6337243269344185,
+   "overfit": false,
+   "no_final_model": false,
+   "wall_sec": 142.6,
+   "usage": {
+    "input_cache_hit": 6912,
+    "input_cache_miss": 15227,
+    "output": 16027,
+    "reasoning": 11257,
+    "calls": 8
+   },
+   "cost_usd": 0.0066386936,
+   "process": {
+    "rounds": {
+     "value": 5,
+     "max": 5,
+     "stop_reason": "MAX_ROUNDS",
+     "evidence": []
+    },
+    "wasted_rounds": {
+     "value": 0.2,
+     "n": 1,
+     "evidence": [
+      "v10c_scn_missing_spec_lending_club_e03"
+     ]
+    },
+    "rejected_decisions": {
+     "value": 0,
+     "by_kind": {},
+     "evidence": []
+    },
+    "decide_failed": {
+     "value": false,
+     "rounds_lost": 0,
+     "evidence": []
+    },
+    "upgrade_hit_rate": {
+     "value": null,
+     "worth": [],
+     "unreachable": [],
+     "evidence": []
+    },
+    "upgrade_success_rate": {
+     "value": 0.0,
+     "evidence": [
+      "v10c_scn_missing_spec_lending_club_e02"
+     ]
+    },
+    "final_lineage": {
+     "value": "赛跑 lgbm → 升全量",
+     "evidence": [
+      "v10c_scn_missing_spec_lending_club_race_lgbm",
+      "v10c_scn_missing_spec_lending_club_e01"
+     ]
+    },
+    "fe_funnel": {
+     "value": false,
+     "attempts": 2,
+     "kept": 1,
+     "promising": 0,
+     "promoted": 0,
+     "accepted": 0,
+     "evidence": [
+      "v10c_scn_missing_spec_lending_club_e03",
+      "v10c_scn_missing_spec_lending_club_e04"
+     ]
+    },
+    "recovery": {
+     "value": 1.0,
+     "evidence": []
+    },
+    "human": {
+     "value": 1,
+     "confirmed": 1,
+     "evidence": [
+      5
+     ]
+    },
+    "oot": {
+     "value": 5,
+     "last_alpha": 0.01916121466686275,
+     "mde": 0.0172,
+     "underpowered": true,
+     "evidence": []
+    },
+    "cost": {
+     "value": 0.0066386936,
+     "wall_sec": 142.6,
+     "tokens": 38166,
+     "sec_per_round": 28.5,
+     "evidence": []
+    }
+   },
+   "passed": true,
+   "reason": "实验前就停下问 label_def，推荐「二分类违约标签：loan_status 属于 Charged Off、Defau」，确认后跑完",
+   "evidence": [
+    5,
+    8
+   ]
+  },
+  {
+   "scenario": "small_oot",
+   "base": "lending_club",
+   "task_id": "v10c_scn_small_oot_lending_club",
+   "status": "ok",
+   "error": null,
+   "final_model": "random_forest",
+   "trace_id": "017e4d594ff1f61a9a98c2661fefcf0f",
+   "n_rounds": 5,
+   "n_rejected": 0,
+   "n_llm_errors": 0,
+   "stop_reason": "LLM_STOP: 已达到最大轮次（round_no=5/max_rounds=5）且 final_model.exists=true：e01（random_forest, full）已 ACCEPT，oot_dev_auc=0.6731、gap=-0.0263（远小于参考 gap=0.0488+容差）。剩余方向上任何新增实验在最后一轮内都无法再走一遍「低保真→PROMOTE_FIDELITY→全量 ACCEPT」链路，因此不可能替换现有最终模型；而 OOT-dev 仅 293 条、45 个正例，AUC 标准误 0.0461、MDE=0.0688，远大于任何可得的真实提升（目标 0.01），即使跑出数值更高也多落在噪声内，期望价值低于成本。",
+   "final_exp": "v10c_scn_small_oot_lending_club_e01",
+   "holdout": 0.6319562431305428,
+   "oot_dev": 0.6731182795698925,
+   "overfit": true,
+   "no_final_model": false,
+   "wall_sec": 170.0,
+   "usage": {
+    "input_cache_hit": 5116,
+    "input_cache_miss": 14208,
+    "output": 12909,
+    "reasoning": 9033,
+    "calls": 7
+   },
+   "cost_usd": 0.005617964800000001,
+   "process": {
+    "rounds": {
+     "value": 4,
+     "max": 5,
+     "stop_reason": "LLM_STOP: 已达到最大轮次（round_no=5/max_rounds=5）且 final_model.exists=true：e01（random_forest, full）已 ACCEPT，oot_dev_auc=0.6731、gap=-0.0263（远小于参考 gap=0.0488+容差）。剩余方向上任何新增实验在最后一轮内都无法再走一遍「低保真→PROMOTE_FIDELITY→全量 ACCEPT」链路，因此不可能替换现有最终模型；而 OOT-dev 仅 293 条、45 个正例，AUC 标准误 0.0461、MDE=0.0688，远大于任何可得的真实提升（目标 0.01），即使跑出数值更高也多落在噪声内，期望价值低于成本。",
+     "evidence": []
+    },
+    "wasted_rounds": {
+     "value": 0.0,
+     "n": 0,
+     "evidence": []
+    },
+    "rejected_decisions": {
+     "value": 0,
+     "by_kind": {},
+     "evidence": []
+    },
+    "decide_failed": {
+     "value": false,
+     "rounds_lost": 0,
+     "evidence": []
+    },
+    "upgrade_hit_rate": {
+     "value": 1.0,
+     "worth": [
+      "v10c_scn_small_oot_lending_club_e02"
+     ],
+     "unreachable": [],
+     "evidence": []
+    },
+    "upgrade_success_rate": {
+     "value": 0.0,
+     "evidence": [
+      "v10c_scn_small_oot_lending_club_e03"
+     ]
+    },
+    "final_lineage": {
+     "value": "赛跑 random_forest → 升全量",
+     "evidence": [
+      "v10c_scn_small_oot_lending_club_race_random_forest",
+      "v10c_scn_small_oot_lending_club_e01"
+     ]
+    },
+    "fe_funnel": {
+     "value": false,
+     "attempts": 1,
+     "kept": 1,
+     "promising": 0,
+     "promoted": 0,
+     "accepted": 0,
+     "evidence": [
+      "v10c_scn_small_oot_lending_club_e04"
+     ]
+    },
+    "recovery": {
+     "value": null,
+     "evidence": []
+    },
+    "human": {
+     "value": 0,
+     "confirmed": 0,
+     "evidence": []
+    },
+    "oot": {
+     "value": 5,
+     "last_alpha": 0.01916121466686275,
+     "mde": 0.0688,
+     "underpowered": true,
+     "evidence": []
+    },
+    "cost": {
+     "value": 0.005617964800000001,
+     "wall_sec": 170.0,
+     "tokens": 32233,
+     "sec_per_round": 42.5,
+     "evidence": []
+    }
+   },
+   "passed": true,
+   "reason": "MDE 0.0688 超过目标，已警告并进入决策上下文；没有不显著的采纳",
+   "evidence": [
+    4
+   ]
+  },
+  {
+   "scenario": "no_signal",
+   "base": "lending_club",
+   "task_id": "v10c_scn_no_signal_lending_club",
+   "status": "ok",
+   "error": null,
+   "final_model": "lgbm",
+   "trace_id": "24a4e79a79e88bf820d6d231d834e7bf",
+   "n_rounds": 4,
+   "n_rejected": 0,
+   "n_llm_errors": 0,
+   "stop_reason": "NO_PROGRESS",
+   "final_exp": "v10c_scn_no_signal_lending_club_e01",
+   "holdout": 0.5089550629588451,
+   "oot_dev": 0.4883219181997442,
+   "overfit": false,
+   "no_final_model": false,
+   "wall_sec": 122.8,
+   "usage": {
+    "input_cache_hit": 3964,
+    "input_cache_miss": 11222,
+    "output": 18872,
+    "reasoning": 15241,
+    "calls": 6
+   },
+   "cost_usd": 0.006866339200000001,
+   "process": {
+    "rounds": {
+     "value": 4,
+     "max": 5,
+     "stop_reason": "NO_PROGRESS",
+     "evidence": []
+    },
+    "wasted_rounds": {
+     "value": 0.0,
+     "n": 0,
+     "evidence": []
+    },
+    "rejected_decisions": {
+     "value": 0,
+     "by_kind": {},
+     "evidence": []
+    },
+    "decide_failed": {
+     "value": false,
+     "rounds_lost": 0,
+     "evidence": []
+    },
+    "upgrade_hit_rate": {
+     "value": null,
+     "worth": [],
+     "unreachable": [],
+     "evidence": []
+    },
+    "upgrade_success_rate": {
+     "value": null,
+     "evidence": []
+    },
+    "final_lineage": {
+     "value": "赛跑 lgbm → 升全量",
+     "evidence": [
+      "v10c_scn_no_signal_lending_club_race_lgbm",
+      "v10c_scn_no_signal_lending_club_e01"
+     ]
+    },
+    "fe_funnel": {
+     "value": false,
+     "attempts": 0,
+     "kept": 0,
+     "promising": 0,
+     "promoted": 0,
+     "accepted": 0,
+     "evidence": []
+    },
+    "recovery": {
+     "value": null,
+     "evidence": []
+    },
+    "human": {
+     "value": 0,
+     "confirmed": 0,
+     "evidence": []
+    },
+    "oot": {
+     "value": 5,
+     "last_alpha": 0.01916121466686275,
+     "mde": 0.0195,
+     "underpowered": true,
+     "evidence": []
+    },
+    "cost": {
+     "value": 0.006866339200000001,
+     "wall_sec": 122.8,
+     "tokens": 34058,
+     "sec_per_round": 30.7,
+     "evidence": []
+    }
+   },
+   "passed": true,
+   "reason": "最终 holdout auc=0.5090，比随机水平高 0.0090",
+   "evidence": [
+    "v10c_scn_no_signal_lending_club_e01"
+   ]
+  }
+ ]
+}

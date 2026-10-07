@@ -1,53 +1,68 @@
 """结构化查询组装 DECIDE 上下文（§4.13）：不用滑动窗口，按当前分支路径、全局最优、最近被拒来查。"""
-from evaluation.guardrails import POLICY_PRIOR, decision_codes, promotable
+from evaluation.guardrails import POLICY_PRIOR, decision_codes, promotable, promote_candidates
+from evaluation.metrics import primary
 from modeling.zoo import ZOO
 
 
-def _line(r):
+def _line(r, pm):
     m = r.metrics or {}
     return {"exp_id": r.exp_id, "action": r.action_type, "model": r.config.get("model"), "fidelity": r.fidelity,
-            "oot_dev_auc": round(m["oot_dev_auc"], 4) if "oot_dev_auc" in m else None,
+            f"oot_dev_{pm}": round(m[f"oot_dev_{pm}"], 4) if f"oot_dev_{pm}" in m else None,
             "gap": round(m["gap"], 4) if "gap" in m else None, "verdict": r.verdict, "codes": r.diagnosis_codes}
 
 
-def build_context(store, p: dict, cfg: dict, spec, oot_budget, remaining: dict, models: list[str]) -> dict:
+def build_context(store, p: dict, cfg: dict, spec, oot_budget, remaining: dict, models: dict[str, str]) -> dict:
     k = cfg["decide"]["topk"]
     tid = p["task_id"]
+    pm = primary(cfg)
+    line = lambda r: _line(r, pm)
     recs = {r.exp_id: r for r in store.all(tid)}
-    codes = decision_codes(p, list(recs.values()))
+    codes = decision_codes(p, list(recs.values()), cfg["run"]["max_rounds"] - p["round_no"])
     prior = {c: POLICY_PRIOR[c] for c in codes if c in POLICY_PRIOR}
     node = recs.get(p["current_node"])
     return {
         "mode": "DECIDE",
-        "spec": {"dataset": spec.dataset, "label_def": spec.label_def, "target": [spec.target_metric, spec.target_value],
+        "spec": {"dataset": spec.dataset, "label_def": spec.label_def, "metric": spec.metric.model_dump(), "target_value": spec.target_value,
                  "constraints": spec.constraints.model_dump(), "autonomy": spec.autonomy},
         "round_no": p["round_no"] + 1, "max_rounds": cfg["run"]["max_rounds"],
         "budget_remaining": remaining,
-        "best": _line(recs[p["best_exp_id"]]) if p["best_exp_id"] else None,
+        "best": line(recs[p["best_exp_id"]]) if p["best_exp_id"] else None,
         "current_node": p["current_node"],
         "current_config": {**node.config, "features": f"{len(node.config['features'])} 个"} if node else None,
-        "path": [_line(r) for r in store.path_to_root(p["current_node"])],
-        "top_k": [_line(r) for r in store.top_k(tid, k)],
-        "recent_rejected": [_line(r) for r in store.recent_rejected(tid, k)],
-        "race": [_line(recs[e]) for e in p["race"] if e in recs],
+        "path": [line(r) for r in store.path_to_root(p["current_node"])],
+        "top_k": [line(r) for r in store.top_k(tid, k, pm)],
+        "recent_rejected": [line(r) for r in store.recent_rejected(tid, k)],
+        "race": [line(recs[e]) for e in p["race"] if e in recs],
         "promoted": [r.diff.get("exp_id") for r in recs.values() if r.action_type == "PROMOTE_FIDELITY"],
         "diagnosis": {"codes": codes, "policy_prior": prior},
         # 最终模型只能来自全保真度实验；把这条规则和当前状态直接写出来，不让 LLM 自己从 best/promoted 推断
-        "final_model": {"exists": bool(p["best_exp_id"]), "promotable": promotable(list(recs.values())),
+        "final_model": {"exists": bool(p["best_exp_id"]), "promotable": promotable(list(recs.values()), pm),
+                        "worth_promoting": promote_candidates(p, list(recs.values())),   # 比对照好、还没升过：加特征的收益要升全量才进得了最终模型
                         "rounds_left": cfg["run"]["max_rounds"] - p["round_no"],
                         "rule": "只有全保真度（full）实验能被 ACCEPT 成为最终模型；PROMOTE_FIDELITY 把 promotable 里的低保真实验在全量数据上复验。"
-                                "全量复验同样要过 OVERFIT_GAP（gap = valid − OOT-dev 超过阈值即拒），选谁时要同时看 AUC 和 gap"},
+                                "全量复验同样要过 OVERFIT_GAP（gap = valid − OOT-dev 超过阈值即拒），选谁时要同时看主指标和 gap",
+                        # 相对判定时：gap − reference_gap > tolerance 才拒；reference_gap 是默认 LightGBM 在本数据上的 gap（正常时间漂移）
+                        "overfit_rule": {"reference_gap": p.get("reference_gap"),
+                                         "tolerance": cfg["evaluator"].get("overfit_gap", {}).get("tolerance")}},
         "unhandled_leaks": p["pending_leaks"],
+        "last_failure": p.get("last_failure"),        # 上一轮执行失败的原因（如 run_code 报错），据此修正而不是盲目重试
+        "run_code": {"max_features": cfg["run_code"]["max_features"],
+                     "inputs": [f for f in p.get("code_inputs", []) if f not in p["quarantined"]]},
         "oot_dev": {"used": oot_budget.used, "max": oot_budget.K, "next_alpha": round(oot_budget.current_alpha(), 4)},
         "taboo_count": len(store.taboo_hashes(tid)),
-        "models_available": models, "templates": p.get("templates", []),
+        "models_available": models,            # 名称 → 模型档案
+        "templates": p.get("templates", []),
+        "templates_used_here": {r.diff["template_id"]: {"exp_id": r.exp_id, "verdict": r.verdict}       # 当前节点上已用过的模板：再用结果相同，校验会拒
+                                for r in recs.values() if r.action_type == "EXPAND_FEATURES" and r.diff.get("template_id")
+                                and r.parent_exp_id == p["current_node"] and not r.invalidated},
+        "oot_power": p.get("oot_power"),      # mde：OOT-dev 能可靠分辨的最小提升；比它小的改进大多判不出显著
         # TUNE 只能改这些参数的上下限（当前节点模型的搜索空间）；不在此列的参数名会被校验拒绝
         "tunable": {k: {kk: vv for kk, vv in v.items() if kk in ("low", "high", "log", "type", "choices")}
                     for k, v in ((node.config.get("space") or ZOO[node.config["model"]].default_space) if node else {}).items()},
         "monotone": {"on": bool(node and node.config.get("monotone")),
                      "supported": bool(node and ZOO[node.config["model"]].supports["monotone_constraints"]),
                      "rule": "TUNE 带 monotone:true 后，若 AUC 不显著变差且分数 PSI 更优则保留；方向来自领域先验，没有先验的特征不加约束"},
-        "fidelity_options": {k: {"sample_frac": v["sample_frac"], "n_trials": v["n_trials"]} for k, v in cfg["fidelity"].items()},
+        "fidelity_options": {k: {"sample_frac": v["sample_frac"], "min_rows": v.get("min_rows", 0), "n_trials": v["n_trials"]} for k, v in cfg["fidelity"].items()},
         "directions": p.get("directions", []),
         "memory": p.get("memory_ctx"),                    # 相似历史任务的 prior + ACTIVE Lesson；冷启动时为 None
         "investigations": p.get("investigations", {}),

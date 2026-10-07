@@ -1,5 +1,5 @@
 # Home Credit 上的模板实例化
-# 每个模板对应 generic_credit.yaml 中的一个 family，并映射到具体表和字段。
+# 每个模板对应领域手册 domains/credit_risk/playbook.yaml 里 feature_concepts 的一个概念，并映射到具体表和字段。
 # factory.py 把模板展开成 DuckDB SQL；所有查询都先应用 home_credit/data_dictionary.yaml 中的 pit_rules。
 # 窗口单位：time_unit = days 时按 DAYS_* >= -w 过滤；time_unit = months 时按 MONTHS_BALANCE >= -w 过滤。
 # "all" 表示不做窗口过滤。

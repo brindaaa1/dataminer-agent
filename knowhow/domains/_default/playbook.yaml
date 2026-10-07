@@ -1,0 +1,23 @@
+# 通用领域手册：任何二分类任务都成立的规则。没有匹配到具体领域时用它；具体领域的手册在它上面覆盖或追加。
+# 字段说明见 domains/_template/playbook.yaml。
+name: _default
+title: 通用二分类
+description: 没有匹配到具体业务领域时使用。只包含与业务无关、对任何二分类都成立的规则。
+
+metric:
+  primary: auc                 # 排序能力，不受正类比例影响
+  guards: {pr_auc: 0.02}       # 正类稀少时更敏感；候选比对照差超过 0.02 就拒
+  report: [auc, pr_auc, ks]
+
+# 字段名命中这些片段（不区分大小写）时，接入起草和规划都会把它当作"可能在结果发生后才有"的字段提示出来。
+leakage_name_patterns: [last_, next_, current_status, outcome, result, final_]
+leakage_desc_keywords: [结果发生后, 事后, 最新, 当前状态]
+
+# 违反时在模型卡里标为"反直觉"，交人工判断，不自动剔除。
+sanity_rules:
+  - 单个特征的贡献占比超过 40%
+  - 模型在某个月份上的 AUC 比其他月份低 0.05 以上
+  - 特征的业务含义无法用一句话解释
+  - 特征与目标的定义同源（例如目标基于某状态，特征直接是这个状态的当前值）
+
+feature_concepts: []           # 通用手册不给领域特征概念

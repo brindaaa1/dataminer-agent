@@ -6,10 +6,10 @@
 # 风控中的"贷后泄漏"在这里对应"事后泄漏"；可得时间的概念保持不变，只是时间点换成了"预订时刻"。
 #
 # availability 取值（本场景）：
-#   at_booking         预订时刻已知
+#   at_prediction         预订时刻已知
 #   history            预订时刻已知的客户历史
 #   updated_until_event 从预订到入住/取消期间会被更新 → 按 unknown 处理
-#   at_checkin         入住时才确定 → 泄漏
+#   before_outcome         入住时才确定 → 泄漏
 #   post_outcome       结果发生后才有 → 泄漏
 #   meta               非特征
 #   unknown            可得时间不明 → LEAK_SUSPECT
@@ -40,38 +40,38 @@ suggested_split:
     报告中需要按月份对比同期（2016 年同月）的坏样本率，区分季节效应与真实漂移。
 
 fields:
-  hotel:                    {availability: at_booking, type: categorical, values: [Resort Hotel, City Hotel]}
-  lead_time:                {availability: at_booking, type: numeric}
-  arrival_date_year:        {availability: at_booking, type: numeric, note: "用于切分；作为特征时会造成时间外推问题，默认不用"}
-  arrival_date_month:       {availability: at_booking, type: categorical}
-  arrival_date_week_number: {availability: at_booking, type: numeric}
-  arrival_date_day_of_month: {availability: at_booking, type: numeric}
-  stays_in_weekend_nights:  {availability: at_booking, type: numeric, note: "对已入住的订单，可能反映实际入住晚数而非预订晚数；列入审查"}
-  stays_in_week_nights:     {availability: at_booking, type: numeric, note: "同上"}
-  adults:                   {availability: at_booking, type: numeric}
-  children:                 {availability: at_booking, type: numeric, note: "有少量缺失"}
-  babies:                   {availability: at_booking, type: numeric}
-  meal:                     {availability: at_booking, type: categorical, note: "Undefined 与 SC 含义相同，合并"}
+  hotel:                    {availability: at_prediction, type: categorical, values: [Resort Hotel, City Hotel]}
+  lead_time:                {availability: at_prediction, type: numeric}
+  arrival_date_year:        {availability: at_prediction, type: numeric, note: "用于切分；作为特征时会造成时间外推问题，默认不用"}
+  arrival_date_month:       {availability: at_prediction, type: categorical}
+  arrival_date_week_number: {availability: at_prediction, type: numeric}
+  arrival_date_day_of_month: {availability: at_prediction, type: numeric}
+  stays_in_weekend_nights:  {availability: at_prediction, type: numeric, note: "对已入住的订单，可能反映实际入住晚数而非预订晚数；列入审查"}
+  stays_in_week_nights:     {availability: at_prediction, type: numeric, note: "同上"}
+  adults:                   {availability: at_prediction, type: numeric}
+  children:                 {availability: at_prediction, type: numeric, note: "有少量缺失"}
+  babies:                   {availability: at_prediction, type: numeric}
+  meal:                     {availability: at_prediction, type: categorical, note: "Undefined 与 SC 含义相同，合并"}
   country:                  {availability: unknown, type: categorical, compliance: review,
                              note: "社区中广为讨论：国籍可能在入住时才确认，被取消订单的取值可能有偏向性默认值；同时属于国籍信息。默认隔离"}
-  market_segment:           {availability: at_booking, type: categorical}
-  distribution_channel:     {availability: at_booking, type: categorical}
+  market_segment:           {availability: at_prediction, type: categorical}
+  distribution_channel:     {availability: at_prediction, type: categorical}
   is_repeated_guest:        {availability: history, type: binary}
   previous_cancellations:   {availability: history, type: numeric}
   previous_bookings_not_canceled: {availability: history, type: numeric}
-  reserved_room_type:       {availability: at_booking, type: categorical}
-  assigned_room_type:       {availability: at_checkin, type: categorical,
+  reserved_room_type:       {availability: at_prediction, type: categorical}
+  assigned_room_type:       {availability: before_outcome, type: categorical,
                              note: "入住时分配；与 reserved_room_type 不一致几乎只出现在已入住的订单中"}
   booking_changes:          {availability: updated_until_event, type: numeric, note: "累计到入住或取消为止"}
-  deposit_type:             {availability: at_booking, type: categorical,
+  deposit_type:             {availability: at_prediction, type: categorical,
                              note: "数据中 Non Refund 的取消率反直觉地高（可能与团体/渠道订单有关）。critic 标注但不自动剔除"}
-  agent:                    {availability: at_booking, type: categorical, note: "ID，高基数，含 NULL 字符串"}
-  company:                  {availability: at_booking, type: categorical, note: "ID，高基数，大量 NULL"}
+  agent:                    {availability: at_prediction, type: categorical, note: "ID，高基数，含 NULL 字符串"}
+  company:                  {availability: at_prediction, type: categorical, note: "ID，高基数，大量 NULL"}
   days_in_waiting_list:     {availability: updated_until_event, type: numeric}
-  customer_type:            {availability: at_booking, type: categorical}
+  customer_type:            {availability: at_prediction, type: categorical}
   adr:                      {availability: updated_until_event, type: numeric,
                              note: "平均每日房价；对已入住订单可能按实际消费计算。有负值和极端值"}
-  required_car_parking_spaces: {availability: at_checkin, type: numeric,
+  required_car_parking_spaces: {availability: before_outcome, type: numeric,
                              note: "被取消的订单几乎全为 0，疑似入住时才登记"}
   total_of_special_requests: {availability: updated_until_event, type: numeric}
   reservation_status:       {availability: post_outcome, role: label_check_only}
@@ -79,14 +79,14 @@ fields:
 
 classic_derived:
   # 规则：派生特征的可得时间 = 其输入中最弱的可得时间（任一输入为 unknown，派生特征即为 unknown）
-  - {name: total_nights, expr: "stays_in_weekend_nights + stays_in_week_nights", availability: at_booking}
-  - {name: total_guests, expr: "adults + coalesce(children, 0) + babies", availability: at_booking}
-  - {name: has_kids, expr: "coalesce(children, 0) + babies > 0", availability: at_booking}
-  - {name: weekend_share, expr: "stays_in_weekend_nights / nullif(total_nights, 0)", availability: at_booking}
+  - {name: total_nights, expr: "stays_in_weekend_nights + stays_in_week_nights", availability: at_prediction}
+  - {name: total_guests, expr: "adults + coalesce(children, 0) + babies", availability: at_prediction}
+  - {name: has_kids, expr: "coalesce(children, 0) + babies > 0", availability: at_prediction}
+  - {name: weekend_share, expr: "stays_in_weekend_nights / nullif(total_nights, 0)", availability: at_prediction}
   - {name: cancel_history_ratio,
      expr: "previous_cancellations / nullif(previous_cancellations + previous_bookings_not_canceled, 0)",
      availability: history}
-  - {name: booking_month, expr: "month(arrival_date - lead_time)", availability: at_booking}
+  - {name: booking_month, expr: "month(arrival_date - lead_time)", availability: at_prediction}
   - {name: price_per_guest, expr: "adr / nullif(total_guests, 0)", availability: unknown, note: "继承 adr 的可得时间"}
-  - {name: room_mismatch, expr: "reserved_room_type <> assigned_room_type", availability: at_checkin,
+  - {name: room_mismatch, expr: "reserved_room_type <> assigned_room_type", availability: before_outcome,
      note: "典型的事后泄漏派生特征，用于泄漏检测评估"}

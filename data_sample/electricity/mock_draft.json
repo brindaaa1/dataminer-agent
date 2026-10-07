@@ -1,0 +1,137 @@
+{
+ "label": {
+  "col": "price_direction",
+  "positive": "UP",
+  "negative": "DOWN",
+  "definition": "该半小时 NSW 电价相对过去 24 小时平均电价上涨记为 UP，否则记为 DOWN"
+ },
+ "observation_time_expr": "\"timestamp\"",
+ "split_time_expr": "\"timestamp\"::DATE",
+ "windows": {
+  "train_valid": [
+   "1996-05",
+   "1997-12"
+  ],
+  "oot_dev": [
+   "1998-01",
+   "1998-06"
+  ],
+  "holdout": [
+   "1998-07",
+   "1998-12"
+  ]
+ },
+ "fields": {
+  "timestamp": {
+   "type": "date",
+   "availability": "meta",
+   "reason": "记录时点本身，只用于定义预测时点与时间切分，不作为特征。",
+   "history": null
+  },
+  "day_of_week": {
+   "type": "categorical",
+   "availability": "at_prediction",
+   "reason": "星期几由日历决定，预测时已知。",
+   "history": null
+  },
+  "period": {
+   "type": "categorical",
+   "availability": "at_prediction",
+   "reason": "一天 48 个半小时的序号，属于日历信息，预测时已知。",
+   "history": null
+  },
+  "nsw_price": {
+   "type": "numeric",
+   "availability": "post_outcome",
+   "reason": "当前半小时的 NSW 电价要等该时段过去才知道，只能用它的历史值。",
+   "history": {
+    "lags": [
+     1,
+     2,
+     48
+    ],
+    "means": [
+     48
+    ]
+   }
+  },
+  "nsw_demand": {
+   "type": "numeric",
+   "availability": "post_outcome",
+   "reason": "当前半小时的 NSW 需求预测时还不知道，只能用它的历史值。",
+   "history": {
+    "lags": [
+     1,
+     2,
+     48
+    ],
+    "means": [
+     48
+    ]
+   }
+  },
+  "vic_price": {
+   "type": "numeric",
+   "availability": "post_outcome",
+   "reason": "当前半小时的 VIC 电价预测时还不知道，只能用它的历史值。",
+   "history": {
+    "lags": [
+     1,
+     2,
+     48
+    ],
+    "means": [
+     48
+    ]
+   }
+  },
+  "vic_demand": {
+   "type": "numeric",
+   "availability": "post_outcome",
+   "reason": "当前半小时的 VIC 需求预测时还不知道，只能用它的历史值。",
+   "history": {
+    "lags": [
+     1,
+     2,
+     48
+    ],
+    "means": [
+     48
+    ]
+   }
+  },
+  "transfer": {
+   "type": "numeric",
+   "availability": "at_prediction",
+   "reason": "业务说明明确这是两州之间“计划”输送量，预测时点已知，可直接作为特征。",
+   "history": null
+  },
+  "price_direction": {
+   "type": "binary",
+   "availability": "post_outcome",
+   "reason": "当前半小时的涨跌结果要等该时段价格确定后才知道，只能作为历史标签使用。",
+   "history": {
+    "lags": [
+     1,
+     2
+    ],
+    "means": [
+     48
+    ]
+   }
+  }
+ },
+ "leakage": [],
+ "quarantine": [],
+ "metric": {
+  "primary": "auc",
+  "guards": {
+   "pr_auc": 0.02
+  }
+ },
+ "domain": "_default",
+ "data_summary": "这份数据是澳大利亚 NSW 电力市场 1996-05 至 1998-12 的每半小时记录，共 45,312 行，每行代表一个半小时时段的 NSW/VIC 价格、需求（均已归一化到 0~1）、两州间计划输送量以及时间信息，所有列都没有缺失。标签 price_direction 表示该半小时 NSW 电价相对过去 24 小时平均水平是涨(UP)还是跌(DOWN)。当前半小时的价格、需求和涨跌结果在做预测时都还看不到，只能使用它们的历史值；而两州间计划输送量是提前排定的，预测时已知。",
+ "history_by": null,
+ "csv_null_values": [],
+ "questions": []
+}

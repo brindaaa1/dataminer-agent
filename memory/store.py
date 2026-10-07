@@ -38,9 +38,10 @@ class Store:
             exp_id = r.parent_exp_id
         return out[::-1]
 
-    def top_k(self, task_id: str, k: int) -> list[ExperimentRecord]:
-        rs = [r for r in self.all(task_id) if r.metrics and not r.invalidated and "oot_dev_auc" in r.metrics]
-        return sorted(rs, key=lambda r: -r.metrics["oot_dev_auc"])[:k]
+    def top_k(self, task_id: str, k: int, pm: str) -> list[ExperimentRecord]:
+        """按 OOT-dev 主指标排序的前 k 个实验。"""
+        rs = [r for r in self.all(task_id) if r.metrics and not r.invalidated and f"oot_dev_{pm}" in r.metrics]
+        return sorted(rs, key=lambda r: -r.metrics[f"oot_dev_{pm}"])[:k]
 
     def recent_rejected(self, task_id: str, k: int) -> list[ExperimentRecord]:
         return [r for r in self.all(task_id) if r.verdict == "REJECT"][-k:]

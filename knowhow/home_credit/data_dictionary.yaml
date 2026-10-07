@@ -6,6 +6,7 @@
 # 数据集没有绝对日期 → 无法做真正的时间切分 OOT，只能随机切分近似（在报告中注明）。
 
 dataset: home_credit
+domain: credit_risk               # 领域手册：knowhow/domains/credit_risk/
 entity_key: SK_ID_CURR
 label:
   source_table: application_train

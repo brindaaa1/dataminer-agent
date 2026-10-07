@@ -21,6 +21,14 @@ def test_copy_knowhow_never_touches_the_original(toy, tmp_path):
     assert orig["dataset"] == "toy" and yaml.safe_load((kh / "toy" / "data_dictionary.yaml").read_text())["dataset"] == "changed"
 
 
+def test_copy_knowhow_keeps_domain_priors(toy, tmp_path):
+    """单调约束的方向、模型卡的先验都读 knowhow 根目录的 domain_priors.yaml；漏复制会让情景运行和正常运行不一样（计划 1 遗留）。"""
+    cfg, _ = toy
+    (Path(cfg["paths"]["knowhow_root"]) / "domain_priors.yaml").write_text("risk_direction: {toy: {x: 1}}\n")
+    kh = common.copy_knowhow("toy", cfg, tmp_path / "v")
+    assert yaml.safe_load((kh / "domain_priors.yaml").read_text()) == {"risk_direction": {"toy": {"x": 1}}}
+
+
 def test_no_signal_shuffles_labels_only_among_labelled_rows(toy, tmp_path):
     cfg, raw = toy
     v = SCENARIOS["no_signal"].build("toy", cfg, tmp_path / "v", {"seed": 0})

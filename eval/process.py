@@ -65,7 +65,14 @@ def process_metrics(events: list[dict], records: list[dict], max_rounds: int, pr
 
     first_accept = next((i for i, r in enumerate(records) if r["verdict"] == "ACCEPT"), None)
 
-    def up(r):                               # 低保真、比对照好：PROMISING，或不确定但点估计更高
+    mark = {e["exp_id"]: e["payload"]["mark"] for e in events if e["type"] == "recorded" and "mark" in e["payload"]}
+    worthy = {e["exp_id"]: e["payload"]["worth"] for e in events if e["type"] == "recorded" and "worth" in e["payload"]}
+
+    def up(r):                               # 低保真、比对照好：以 agent 记下的 worth（差距 ≥ MDE）/ 标记为准；旧运行都没有，按差 > 0
+        if r["exp_id"] in worthy:
+            return worthy[r["exp_id"]]
+        if r["exp_id"] in mark:
+            return r["fidelity"] == "low" and mark[r["exp_id"]] in ("PROMISING", "INCONCLUSIVE_UP")
         d = delta.get(r["exp_id"])
         return r["fidelity"] == "low" and (r["verdict"] == "PROMISING" or (r["verdict"] == "INCONCLUSIVE" and d is not None and d > 0))
     cands = [r["exp_id"] for i, r in enumerate(records)
@@ -78,7 +85,8 @@ def process_metrics(events: list[dict], records: list[dict], max_rounds: int, pr
     promoted = {r["diff"].get("exp_id"): r for r in records if r["action_type"] == "PROMOTE_FIDELITY"}
     out["upgrade_hit_rate"] = {"value": _rate(sum(e in promoted for e in worth), len(worth)), "worth": worth,
                                "unreachable": unreachable, "evidence": [e for e in worth if e not in promoted]}
-    ups = list(promoted.values())
+    # 第一次升全量（还没有最终模型）几乎总被采纳，不算：只看已有最终模型之后想换更好的那些
+    ups = [r for i, r in enumerate(records) if r["action_type"] == "PROMOTE_FIDELITY" and first_accept is not None and i > first_accept]
     out["upgrade_success_rate"] = {"value": _rate(sum(r["verdict"] == "ACCEPT" for r in ups), len(ups)),
                                    "evidence": [r["exp_id"] for r in ups]}
 

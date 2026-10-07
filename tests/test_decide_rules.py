@@ -87,3 +87,20 @@ def test_retry_feedback_accumulates_all_errors(env):
     d, _ = decide(llm, {"mode": "DECIDE"}, v, cfg)
     assert d.params["template_id"] == "t2"
     assert "e02" in llm.calls[2] and "t9" in llm.calls[2]                     # 第三次同时看到两次被拒的原因（e02 只出现在 t1 的错误里）
+
+
+def test_tied_candidate_cannot_be_promoted_once_there_is_a_final_model(env):
+    """v7–v10：已有最终模型后，调参 / 加特征的候选低保真时比最优只高不到 MDE，升全量 19 次 0 次采纳，合计 1600 多秒。
+    差距 < MDE 就是打平：只有值得升的（promote_hint，差距 ≥ MDE）才能升；其他赛跑模型照样能升（v10c hotel s0 靠它纠正了打平规则）。"""
+    store, p, v, _ = env
+    store.add(rec("e05", "EXPAND_FEATURES", {**B, "features": ["x1", "x2", "f2"]}, "PROMISING", "e01", {"template_id": "t2"}))
+    store.add(rec("race2", "RACE", {**A, "model": "lgbm"}, "INCONCLUSIVE"))
+    p["promote_hint"] = []
+    errs = " ".join(v.check(dec("PROMOTE_FIDELITY", {"exp_id": "e05"})))
+    assert "打平" in errs and "MDE" in errs
+    assert v.check(dec("PROMOTE_FIDELITY", {"exp_id": "race2"})) == []
+    p["promote_hint"] = ["e05"]
+    assert v.check(dec("PROMOTE_FIDELITY", {"exp_id": "e05"})) == []
+    p["best_exp_id"] = None                                                   # 还没有最终模型：照常能升
+    p["promote_hint"] = []
+    assert v.check(dec("PROMOTE_FIDELITY", {"exp_id": "e05"})) == []

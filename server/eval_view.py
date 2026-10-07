@@ -7,6 +7,14 @@ LABELS = {"rounds": "轮数", "wasted_rounds": "无效轮次", "rejected_decisio
           "cost": "花费（美元）"}
 
 
+METRIC_LABELS = {"holdout": "holdout", "delta_b1": "相对 B1 的差", "wasted_rate": "无效轮次率", "rejected_decisions": "被拒决策",
+                 "upgrade_hit_rate": "升全量命中率", "fe_in_final": "特征工程进最终模型"}
+FLAG_LABELS = {"failed_run": "运行失败或没有最终模型", "decide_failed": "因决策失败收尾", "new_reject_kind": "新出现的被拒原因",
+               "scenario_regressed": "情景从通过变不通过", "scenario_failed": "情景不通过", "overfit": "新出现的 OOT-dev 过拟合",
+               "cost_up": "用时或花费上升"}
+COST_LABELS = {"wall_sec": "用时（秒）", "cost_usd": "花费（美元）"}
+
+
 def segments(events: list[dict]) -> dict[int, str]:
     """与 web/src/lib/trace.ts 的 segmentOf 同一规则：进 DECIDE 开始新一轮，进 FINAL_GATE 之后是收尾。"""
     n, finale, out = 0, False, {}
@@ -49,15 +57,22 @@ def version_view(v: dict, reg: dict | None) -> dict:
     runs = [{"task": f"ev-{r['task_id']}", "dataset": ds, "seed": r["seed"], "status": r["status"], "holdout": r.get("holdout"),
              "delta_b1": None if r.get("holdout") is None or _b1(v, ds) is None else r["holdout"] - _b1(v, ds)}
             for ds, d in v["datasets"].items() for r in d["runs"]]
-    if reg is None:
-        return {"label": v["label"], "tier": v["tier"], "against": None, "conclusion": "没有回归对比（没有可比的同档上一版本）",
-                "noise_calibrated": False, "table": [], "flags": [], "runs": runs}
-    return {"label": v["label"], "tier": v["tier"], "against": reg["old"], "conclusion": reg["conclusion"],
+    running = v.get("status") == "running"
+    summary = [{"dataset": ds, **d["summary"], "worst_task": ev(d["summary"].get("worst_task"))}
+               for ds, d in v["datasets"].items() if d.get("summary")]
+    if reg is None or running:
+        why = "运行中：跑完后和同档上一版本对比" if running else "没有回归对比（没有可比的同档上一版本）"
+        return {"label": v["label"], "tier": v["tier"], "running": running, "against": None, "conclusion": why,
+                "noise_calibrated": False, "table": [], "flags": [], "cost": [], "runs": runs, "summary": summary}
+    return {"label": v["label"], "tier": v["tier"], "running": False, "against": reg["old"], "conclusion": reg["conclusion"],
             "noise_calibrated": reg.get("noise_calibrated", False),
-            "table": [{k: t[k] for k in ("dataset", "metric", "new", "old", "delta", "n", "verdict")} | {"task": ev(t.get("worst_task"))}
-                      for t in reg.get("table", [])],
-            "flags": [{"kind": f["kind"], "detail": f["detail"], "task": ev(f.get("task_id"))} for f in reg.get("flags", [])],
-            "runs": runs}
+            "table": [{k: t[k] for k in ("dataset", "metric", "new", "old", "delta", "n", "verdict")}
+                      | {"label": METRIC_LABELS.get(t["metric"], t["metric"]), "task": ev(t.get("worst_task"))} for t in reg.get("table", [])],
+            "flags": [{"kind": f["kind"], "label": FLAG_LABELS.get(f["kind"], f["kind"]), "detail": f["detail"], "task": ev(f.get("task_id"))}
+                      for f in reg.get("flags", [])],
+            "cost": [{"dataset": c["dataset"], "label": COST_LABELS[c["key"]], "new": c["new"], "old": c["old"], "ratio": c["ratio"],
+                      "threshold": c["threshold"]} for c in reg.get("cost", [])],
+            "runs": runs, "summary": summary}
 
 
 def scenarios_view(v: dict) -> list[dict]:

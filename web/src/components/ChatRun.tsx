@@ -20,7 +20,7 @@ export function ChatRun({ snap }: { snap: Snapshot }) {
           {n.tone === "running" && <Loader2 className="mr-1 inline size-3 animate-spin" />}{n.text}
         </Bubble>
       ))}
-      {snap.status === "running" && (
+      {snap.status === "running" && !snap.readonly && (
         <Button size="sm" variant="outline" onClick={() => stop.mutate()} disabled={stop.isPending}><Square className="size-3" />中止</Button>
       )}
       <ErrorText error={stop.error ?? resume.error} />

@@ -118,6 +118,9 @@ def test_live_failed_run_is_not_shown_as_success(app, monkeypatch):
             return "不是 JSON", 0
 
     monkeypatch.setattr("agent.llm.make_llm", lambda provider, cfg, api_key=None: Garbage())
+    import data.knowhow as kh
+    orig = kh.load_config
+    monkeypatch.setattr(kh, "load_config", lambda *a, **k: (c := orig(*a, **k), c["race"].update(rule_first_promotion=False))[0])   # 第一轮也交给 LLM，才会在没有模型时失败
     app.selectbox(key="provider").set_value("DeepSeek").run()
     app.text_input(key="api_key").input("sk-test").run()
     app.button(key="run").click().run()

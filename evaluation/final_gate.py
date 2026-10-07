@@ -27,13 +27,15 @@ class FinalGate:
     def load_holdout(self):
         return self._data.load("holdout", token=self._token)
 
-    def _finish(self, exp_id, h, p, oot, extra=None) -> dict:
-        """oot：该实验 OOT-dev 上的主指标。drop 和『疑似对 OOT-dev 过拟合』都按主指标算，其余指标并列记录。"""
+    def _finish(self, exp_id, h, p, oot, extra=None, ref_drop=None) -> dict:
+        """oot：该实验 OOT-dev 上的主指标。drop 和『疑似对 OOT-dev 过拟合』都按主指标算，其余指标并列记录。
+        ref_drop：默认参照模型自己的 OOT-dev → holdout 下滑；有它时多掉超过 δ 才算疑似过拟合（hotel 参照自己就掉 0.043）。"""
         pm = primary(self.cfg)
         hm = all_metrics(h["_label"].values, p)
+        drop = float(oot - hm[pm])
         res = {"exp_id": exp_id, "metric": pm, **{f"holdout_{k}": v for k, v in hm.items()},
-               f"oot_dev_{pm}": float(oot), "drop": float(oot - hm[pm]),
-               "overfit_to_oot_dev": bool((oot - hm[pm]) > self.cfg["final_gate"]["delta"]),
+               f"oot_dev_{pm}": float(oot), "drop": drop, "reference_drop": ref_drop,
+               "overfit_to_oot_dev": bool(drop - (ref_drop or 0.0) > self.cfg["final_gate"]["delta"]),
                "n_holdout": int(len(h)), "holdout_bad_rate": float(h["_label"].mean()), **(extra or {})}
         tcol = "_split_time" if "_split_time" in h else "_obs_time"      # 分月按『切分所用的时间』（如到店日），而不是观察时间
         if tcol in h:
@@ -62,7 +64,11 @@ class FinalGate:
         preds = fit_and_predict(self.dataset, self.cfg, best["config"], best["best_params"],
                                 {"holdout": h, **({"masked": hm} if mask_fields else {})})
         extra = {"holdout_auc_masked": float(roc_auc_score(h["_label"], preds["masked"]))} if mask_fields else None
-        return self._finish(best["exp_id"], h, preds["holdout"], best["metrics"][f"oot_dev_{primary(self.cfg)}"], extra)
+        ref = None
+        if self.cfg["evaluator"].get("overfit_gap", {}).get("mode") == "relative":
+            from evaluation.reference import reference_drop
+            ref = float(reference_drop(self.dataset, self.cfg, h))
+        return self._finish(best["exp_id"], h, preds["holdout"], best["metrics"][f"oot_dev_{primary(self.cfg)}"], extra, ref)
 
     def run_predictor(self, exp_id: str, predict_fn, oot_dev_score: float) -> dict:
         """基线（B0/B1）用：predict_fn(holdout_df) → 分数。与 run_once 相同的『只评一次』约束。"""

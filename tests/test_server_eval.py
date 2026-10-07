@@ -52,7 +52,7 @@ def test_index_lists_seeds_and_scenarios_grouped_by_version(evroot):
     s = eval_tasks.summaries()
     assert [x["id"] for x in s] == ["ev-v9_hotel_s0", "ev-v9_hotel_s1", "ev-v9_scn_leak_hotel"]
     assert [x["status"] for x in s] == ["done", "failed", "done"]
-    assert s[0]["eval"] == {"label": "v9", "tier": "fast", "conclusion": None} and s[0]["title"] == "hotel · 种子 0"
+    assert s[0]["eval"] == {"label": "v9", "tier": "fast", "conclusion": None, "running": False} and s[0]["title"] == "hotel · 种子 0"
     assert s[2]["title"] == "情景 leak @ hotel"
     e = eval_tasks.index()["ev-v9_scn_leak_hotel"]
     assert e["art"] == evroot["runs"] / "v9" / "hotel" / "scn_leak" and e["max_rounds"] == 5
@@ -157,3 +157,70 @@ def test_eval_view_for_example_has_process_only(client):
     ex = next(t["id"] for t in client.get("/api/tasks").json() if t["example"])
     e = client.get(f"/api/tasks/{ex}/eval").json()
     assert e["version"] is None and e["scenarios"] is None and {r["key"] for r in e["process"]} >= {"rounds", "wasted_rounds"}
+
+
+def test_running_version_lists_the_seed_in_progress(evroot):
+    """正在跑的版本：version.json 是 running，已跑完的种子照常列出；产物目录已经有、还没写进 version.json 的是"运行中"。"""
+    from server import eval_tasks
+    p = evroot["res"] / "v9" / "version.json"
+    v = json.loads(p.read_text())
+    v["status"] = "running"
+    p.write_text(json.dumps(v))
+    art = evroot["runs"] / "v9" / "lc" / "s0"
+    art.mkdir(parents=True)
+    EventLog(str(art / "state.db"), "v9_lc_s0").append("state_transition", {"to": "PLAN", "sec": 1.0})
+    sc = evroot["runs"] / "v9" / "lc" / "scn_no_signal"
+    sc.mkdir(parents=True)
+    EventLog(str(sc / "state.db"), "v9_scn_no_signal_lc").append("state_transition", {"to": "PLAN", "sec": 1.0})
+    s = {x["id"]: x for x in eval_tasks.summaries()}
+    assert s["ev-v9_lc_s0"]["status"] == "running" and s["ev-v9_lc_s0"]["title"] == "lc · 种子 0"
+    assert s["ev-v9_scn_no_signal_lc"]["status"] == "running" and s["ev-v9_hotel_s0"]["eval"]["running"] is True
+    src = eval_tasks.load("ev-v9_lc_s0")
+    assert src["meta"]["status"] == "running" and [e["type"] for e in src["events"]] == ["state_transition"]
+
+
+def test_versions_are_cached_until_the_file_changes(evroot):
+    """每个请求都重读所有 version.json，版本多了会慢：没变的文件不重读。"""
+    import os
+    from server import eval_tasks
+    p = evroot["res"] / "v9" / "version.json"
+    a = eval_tasks._read(p)
+    assert eval_tasks._read(p) is a
+    v = json.loads(p.read_text())
+    v["tier"] = "full"
+    p.write_text(json.dumps(v))
+    os.utime(p, ns=(p.stat().st_mtime_ns + 10**9,) * 2)
+    assert eval_tasks._read(p)["tier"] == "full"
+
+
+def test_version_view_metric_names_cost_and_running(evroot):
+    from server import eval_tasks
+    from server.eval_view import version_view
+    (evroot["res"] / "v9" / "regression.json").write_text(json.dumps({
+        "new": "v9", "old": "v8", "tier": "fast", "noise_calibrated": True, "conclusion": "无退步", "flags": [],
+        "table": [{"dataset": "hotel", "metric": "delta_b1", "new": .01, "old": .0, "delta": .01, "n": 2, "verdict": "same", "worst_task": None}],
+        "cost": [{"dataset": "hotel", "key": "wall_sec", "new": 50, "old": 100, "ratio": 0.5, "threshold": 3.31}]}))
+    v, reg = eval_tasks.version_of("ev-v9_hotel_s0")
+    vv = version_view(v, reg)
+    assert vv["table"][0]["label"] == "相对 B1 的差" and vv["cost"] == [{"dataset": "hotel", "label": "用时（秒）", "new": 50, "old": 100,
+                                                                        "ratio": 0.5, "threshold": 3.31}]
+    vr = version_view({**v, "status": "running"}, None)
+    assert vr["running"] is True and "运行中" in vr["conclusion"]
+
+
+def test_version_view_flag_labels_and_dataset_summary(evroot):
+    """硬性标记显示中文说明而不是 cost_up 这类代码；本版本有每个数据集的合计（version.json 的 summary）。"""
+    from server import eval_tasks
+    from server.eval_view import version_view
+    p = evroot["res"] / "v9" / "version.json"
+    v = json.loads(p.read_text())
+    v["datasets"]["hotel"]["summary"] = {"n": 2, "n_ok": 1, "holdout_mean": 0.79, "delta_b1_mean": 0.01, "rounds_mean": 4.0,
+                                         "fe_in_final": "0/2", "wall_sec": 100.0, "cost_usd": 0.006, "worst_task": "v9_hotel_s1"}
+    p.write_text(json.dumps(v))
+    (evroot["res"] / "v9" / "regression.json").write_text(json.dumps({
+        "new": "v9", "old": "v8", "tier": "fast", "noise_calibrated": True, "conclusion": "有退步需看（1 项）", "table": [], "cost": [],
+        "flags": [{"kind": "cost_up", "dataset": "hotel", "detail": "wall_sec 1 → 2（阈值 ×1.3）"}]}))
+    vv = version_view(*eval_tasks.version_of("ev-v9_hotel_s0"))
+    assert vv["flags"][0]["label"] == "用时或花费上升"
+    assert vv["summary"] == [{"dataset": "hotel", "n": 2, "n_ok": 1, "holdout_mean": 0.79, "delta_b1_mean": 0.01, "rounds_mean": 4.0,
+                              "fe_in_final": "0/2", "wall_sec": 100.0, "cost_usd": 0.006, "worst_task": "ev-v9_hotel_s1"}]

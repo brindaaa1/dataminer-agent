@@ -31,18 +31,23 @@ function TrialLine({ trials }: { trials: Record<string, Trial[]> }) {
   )
 }
 
+/** 代码按规则做的决策（赛跑打平后第一次升全量），不是 LLM 的。 */
+function RuleBadge() {
+  return <span className="rounded border px-1 text-xs text-muted-foreground" title="代码按规则做的决策，没有调 LLM">规则</span>
+}
+
 function Detail({ r, L, langfuse, onTrace }: { r: Round; L: string; langfuse: string | null; onTrace: (k: string) => void }) {
   const m: [string, number | null][] = [[`训练 ${L}`, r.metrics.train], [`验证 ${L}`, r.metrics.valid], [`时间外 ${L}`, r.metrics.oot_dev],
     ["时间外 KS", r.metrics.oot_dev_ks], ["gap", r.metrics.gap]]
   return (
     <div className="space-y-3 rounded-md border p-3 text-sm">
       <div className="flex items-center gap-2">
-        <b>{r.title} · {r.action_label}</b><VerdictBadge v={r.verdict} />
+        <b>{r.title} · {r.action_label}</b>{r.by_rule && <RuleBadge />}<VerdictBadge v={r.verdict} />
         {r.running && <Loader2 className="size-3 animate-spin" />}
       </div>
       {(r.hypothesis || r.stop_reason) && (
         <section>
-          <h4 className="text-xs text-muted-foreground">决策（LLM）</h4>
+          <h4 className="text-xs text-muted-foreground">{r.by_rule ? "决策（规则）" : "决策（LLM）"}</h4>
           <p>{r.stop_reason ?? r.hypothesis}</p>
           {r.alternatives.length > 0 && (
             <ul className="mt-1 list-disc pl-5 text-muted-foreground">{r.alternatives.map((a, i) => <li key={i}>考虑过：{a}</li>)}</ul>
@@ -118,7 +123,7 @@ export function ProcessTab({ snap, onTrace }: { snap: Snapshot; onTrace: (round:
               <li key={x.key}>
                 <button onClick={() => setSel(x.key)}
                   className={cn("w-full rounded-md border p-2 text-left text-sm", cur?.key === x.key && "border-primary ring-1 ring-primary")}>
-                  <div className="flex items-center gap-2">{x.title} · {x.action_label}<VerdictBadge v={x.verdict} />{x.running && <Loader2 className="size-3 animate-spin" />}</div>
+                  <div className="flex items-center gap-2">{x.title} · {x.action_label}{x.by_rule && <RuleBadge />}<VerdictBadge v={x.verdict} />{x.running && <Loader2 className="size-3 animate-spin" />}</div>
                   <div className="text-xs text-muted-foreground">
                     {x.metrics.oot_dev != null && `时间外 ${L} ${f3(x.metrics.oot_dev)}`}{x.metrics.gap != null && ` · gap ${f3(x.metrics.gap)}`}
                   </div>

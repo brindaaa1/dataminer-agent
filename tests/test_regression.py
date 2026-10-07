@@ -68,7 +68,7 @@ def test_no_previous_version_is_not_an_error(tmp_path):
     from eval.suite.version import latest_version
     (tmp_path / "v6").mkdir()
     (tmp_path / "v6" / "runs.jsonl").write_text("{}\n")          # 旧版本只有 runs.jsonl，没有 version.json
-    assert latest_version(tmp_path, "fast", exclude="v7") is None
+    assert latest_version(tmp_path, "fast", before="v7") is None
 
 
 def ver2(label, hotel, lc, b0=None):
@@ -121,3 +121,49 @@ def test_aa_pair_does_not_flag_itself_after_calibration():
     a, b = ver("a", [run(0, 0.70)]), ver("b", [run(0, 0.70)])
     b["datasets"]["d"]["runs"][0]["wall_sec"] = 333.4
     assert not compare(b, a, calibrate(b, a))["flags"]
+
+
+def test_aa_calibration_refuses_different_settings():
+    """--aa 两次的档位或设置不同（例如轮数上限改了），差异就不是噪声，不能拿来校准。"""
+    with pytest.raises(SettingsMismatch):
+        calibrate(ver("b", [run(0, 0.7)], settings={"max_rounds": 5}), ver("a", [run(0, 0.7)]))
+
+
+def test_cost_change_is_reported_per_dataset():
+    """汇总直接给出用时、花费的变化，不只在越线时出硬性标记。"""
+    new = ver("v7", [run(0, 0.70), run(1, 0.71)])
+    new["datasets"]["d"]["runs"][0]["wall_sec"] = 50
+    r = compare(new, ver("v6", [run(0, 0.70), run(1, 0.71)]), NOISE)
+    c = next(x for x in r["cost"] if x["dataset"] == "d" and x["key"] == "wall_sec")
+    assert (c["new"], c["old"], c["ratio"]) == (150, 200, 0.75)
+    assert "用时与花费" in render_md(r) and "×0.75" in render_md(r)
+
+
+def test_previous_version_is_by_label_order_and_skips_running(tmp_path):
+    """上一版本按版本号取（v9a 的上一版本是 v8，即使 v7b 是最近才跑完的）；正在跑的版本不参与对比。"""
+    import json
+    from eval.suite.version import latest_version
+    for lab, fin, st in (("v7b", 9, "done"), ("v8", 5, "done"), ("v8x", 6, "running"), ("v9b", 7, "done")):
+        (tmp_path / lab).mkdir()
+        (tmp_path / lab / "version.json").write_text(json.dumps({"label": lab, "tier": "fast", "finished": fin, "status": st}))
+    assert latest_version(tmp_path, "fast", before="v9a")["label"] == "v8"
+    assert latest_version(tmp_path, "fast", before="v10")["label"] == "v9b"
+    assert latest_version(tmp_path, "fast", before="v7a") is None
+
+
+def test_cost_rows_only_for_datasets_with_pairs():
+    """旧版本只跑了部分数据集（v10b 只有 lending_club）：没有配对的数据集不出"0 → 0"的空行。"""
+    new = ver2("v11", [run(0, 0.79)], [run(0, 0.66)])
+    old = ver("v10", [run(0, 0.79)])
+    old["datasets"] = {"lc": {"baselines": {}, "runs": [run(0, 0.66)]}}
+    r = compare(new, old, NOISE)
+    assert {c["dataset"] for c in r["cost"]} == {"lc"}
+
+
+def test_parallel_runs_skip_wall_time_comparison():
+    """--jobs > 1 时各进程抢 CPU，用时被拉长：不比用时、不出用时上升的标记；花费（token）照常比。"""
+    new, old = ver("v11", [run(0, 0.70)]), ver("v10", [run(0, 0.70)])
+    new["jobs"] = 4
+    new["datasets"]["d"]["runs"][0]["wall_sec"] = 1000
+    r = compare(new, old, NOISE)
+    assert {c["key"] for c in r["cost"]} == {"cost_usd"} and not any(f["kind"] == "cost_up" for f in r["flags"])

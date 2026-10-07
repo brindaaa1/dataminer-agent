@@ -3,6 +3,7 @@ import contextlib
 import json
 import os
 import re
+import threading
 import time
 
 from runtime.env import load_env
@@ -48,22 +49,44 @@ class OpenAICompatLLM:
 
     def __init__(self, model: str, base_url: str, key_env: str, max_tokens: int = 2000, client=None,
                  fixed_temperature: float | None = None, api_key: str | None = None, thinking: bool | None = None,
-                 max_retries: int = 2):
+                 max_retries: int = 2, timeout: float | None = None, deadline: float | None = None, deadline_retries: int = 0):
         if client is None:
             import openai
             key = api_key or os.environ.get(key_env)
             if not key:
                 raise RuntimeError(f"环境变量 {key_env} 未设置：请在启动前 export {key_env}=...")
-            client = openai.OpenAI(api_key=key, base_url=base_url, max_retries=max_retries)
+            client = openai.OpenAI(api_key=key, base_url=base_url, max_retries=max_retries, timeout=timeout)
         self.client, self.model, self.max_tokens, self.fixed_temperature = client, model, max_tokens, fixed_temperature
         self.thinking, self.last_usage = thinking, None
+        self.deadline, self.deadline_retries = deadline, deadline_retries
+
+    def _create(self, **kw):
+        """总时长上限：SDK 的 timeout 只管两次收到数据的间隔，服务端一直发保活数据时永远不超时（v10c 一次 PLAN 等了 2132 秒）。
+        超时就放弃这次（守护线程，不拖住进程退出）、重新发起。"""
+        if not self.deadline:
+            return self.client.chat.completions.create(**kw)
+        for _ in range(self.deadline_retries + 1):
+            box = {}
+
+            def run():
+                try:
+                    box["r"] = self.client.chat.completions.create(**kw)
+                except Exception as e:                 # 交回调用方，和不设上限时一样抛出
+                    box["e"] = e
+            t = threading.Thread(target=run, daemon=True)
+            t.start()
+            t.join(self.deadline)
+            if "e" in box:
+                raise box["e"]
+            if "r" in box:
+                return box["r"]
+        raise TimeoutError(f"LLM 调用超过 {self.deadline} 秒，已重试 {self.deadline_retries} 次")
 
     def complete(self, system: str, user: str, temperature: float = 0.0):
         extra = {"extra_body": {"thinking": {"type": "disabled"}}} if self.thinking is False else {}   # DeepSeek flash 默认先推理
-        r = self.client.chat.completions.create(          # 部分模型（如 kimi-k3）只允许固定温度
-            model=self.model, max_tokens=self.max_tokens,
-            temperature=self.fixed_temperature if self.fixed_temperature is not None else temperature,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}], **extra)
+        r = self._create(model=self.model, max_tokens=self.max_tokens,           # 部分模型（如 kimi-k3）只允许固定温度
+                         temperature=self.fixed_temperature if self.fixed_temperature is not None else temperature,
+                         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}], **extra)
         self.last_usage = _usage(r.usage)
         return r.choices[0].message.content or "", (r.usage.total_tokens if r.usage else 0)
 
@@ -115,7 +138,8 @@ def make_llm(provider: str, cfg: dict, api_key: str | None = None):
         return AnthropicLLM(p["model"], cfg["llm"]["max_tokens"], api_key=api_key)
     return OpenAICompatLLM(p["model"], p["base_url"], p["key_env"], p.get("max_tokens", cfg["llm"]["max_tokens"]),
                            fixed_temperature=p.get("fixed_temperature"), api_key=api_key, thinking=p.get("thinking"),
-                           max_retries=cfg["llm"].get("max_retries", 2))
+                           max_retries=cfg["llm"].get("max_retries", 2), timeout=cfg["llm"]["timeout_sec"],
+                           deadline=cfg["llm"]["deadline_sec"], deadline_retries=cfg["llm"]["deadline_retries"])
 
 
 class ScriptedLLM:

@@ -81,15 +81,19 @@ def _diffs(pairs, f):
     return out
 
 
-def compare(new: dict, old: dict, noise: dict | None = None) -> dict:
+def _check_comparable(new: dict, old: dict):
     diff = {k: (new["settings"].get(k), old["settings"].get(k)) for k in set(new["settings"]) | set(old["settings"])
             if new["settings"].get(k) != old["settings"].get(k)}
     if new["tier"] != old["tier"]:
         diff["tier"] = (new["tier"], old["tier"])
     if diff:
         raise SettingsMismatch(diff)
+
+
+def compare(new: dict, old: dict, noise: dict | None = None) -> dict:
+    _check_comparable(new, old)
     noise = noise or load_noise()
-    table, flags = [], []
+    table, flags, cost = [], [], []
     for ds in new["datasets"]:
         bands = noise.get("by_dataset", {}).get(ds, noise["bands"])
         ratio = noise.get("cost_ratio", {}).get(ds, {})
@@ -106,8 +110,11 @@ def compare(new: dict, old: dict, noise: dict | None = None) -> dict:
             table.append({"dataset": ds, "metric": m, "delta": round(mean, 4), "new": round(sum(x for _, x, _, _ in ds_) / len(ds_), 4),
                           "old": round(sum(y for _, _, y, _ in ds_) / len(ds_), 4), "n": len(ds_), "verdict": verdict,
                           "worst_task": worst.get("task_id")})
-        for key in ("wall_sec", "cost_usd"):
+        keys = ("wall_sec", "cost_usd") if new.get("jobs", 1) == old.get("jobs", 1) == 1 else ("cost_usd",)   # 并行跑时用时不可比
+        for key in keys if pairs else ():       # 旧版本没跑这个数据集：没有可比的用时花费
             n_, o_ = sum(p[1].get(key) or 0 for p in pairs), sum(p[2].get(key) or 0 for p in pairs)
+            cost.append({"dataset": ds, "key": key, "new": round(n_, 4), "old": round(o_, 4), "ratio": round(n_ / o_, 2) if o_ else None,
+                         "threshold": ratio.get(key, COST_UP)})
             if o_ and n_ > ratio.get(key, COST_UP) * o_:
                 flags.append({"kind": "cost_up", "dataset": ds, "detail": f"{key} {o_:.4g} → {n_:.4g}（阈值 ×{ratio.get(key, COST_UP)}）"})
         old_by = {r["seed"]: r for r in old["datasets"].get(ds, {}).get("runs", [])}
@@ -134,7 +141,7 @@ def compare(new: dict, old: dict, noise: dict | None = None) -> dict:
     worse = [t for t in table if t["verdict"] == "worse"]
     n_bad = len(worse) + len(flags)
     return {"new": new["label"], "old": old["label"], "tier": new["tier"], "noise_calibrated": bool(noise.get("calibrated")),
-            "table": table, "flags": flags, "conclusion": "无退步" if not n_bad else f"有退步需看（{n_bad} 项）"}
+            "table": table, "flags": flags, "cost": cost, "conclusion": "无退步" if not n_bad else f"有退步需看（{n_bad} 项）"}
 
 
 def _bands(pairs) -> dict:
@@ -145,6 +152,7 @@ def _bands(pairs) -> dict:
 def calibrate(a: dict, b: dict) -> dict:
     """A/A：同一代码跑两次。每个数据集、每个指标取配对差的最大绝对值（不低于默认值）作为噪声带；
     全局 bands 取所有数据集的最大值。时间、花费取两次总量之比（不低于 COST_UP）作为该数据集的上涨阈值。"""
+    _check_comparable(a, b)                  # 设置不同时差异不是噪声
     pairs = _pairs(a, b)
     by_ds, ratio = {}, {}
     for ds in dict.fromkeys(p[0] for p in pairs):
@@ -166,6 +174,11 @@ def render_md(reg: dict) -> str:
          "| 数据集 | 指标 | 新 | 旧 | 差 | 配对数 | 判定 | 变化最大的运行 |", "|---|---|---|---|---|---|---|---|"]
     L += [f"| {t['dataset']} | {t['metric']} | {t['new']} | {t['old']} | {t['delta']:+} | {t['n']} | {ARROW[t['verdict']]} | {t['worst_task'] or ''} |"
           for t in reg["table"]]
+    if reg.get("cost"):
+        name = {"wall_sec": "用时（秒）", "cost_usd": "花费（美元）"}
+        L += ["", "**用时与花费**（配对种子合计）", "", "| 数据集 | 项 | 新 | 旧 | 倍数 | 标记阈值 |", "|---|---|---|---|---|---|"]
+        L += [f"| {c['dataset']} | {name[c['key']]} | {c['new']:.4g} | {c['old']:.4g} | " + (f"×{c['ratio']}" if c["ratio"] is not None else "—")
+              + f" | ×{c['threshold']} |" for c in reg["cost"]]
     if reg["flags"]:
         L += ["", "**硬性标记**", ""] + [f"- {f['kind']}：{f['detail']}" + (f"（{f['task_id']}）" if f.get("task_id") else "") for f in reg["flags"]]
     return "\n".join(L + [""])

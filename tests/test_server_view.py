@@ -91,3 +91,39 @@ def test_resumed_race_does_not_list_the_same_experiment_twice():
     setup = snapshot(src)["run"]["rounds"][0]
     assert [e["exp_id"] for e in setup["evaluations"]] == ["t_race_lgbm", "t_race_lr_scorecard"]
     assert snapshot(src)["run"]["narration"][0]["text"].count("lgbm") == 1
+
+
+def test_race_narration_mentions_tie():
+    """赛跑打平时播报里说明"效果相当、按偏好推荐"，否则用户会以为选的是分数最高的。"""
+    from server.view import snapshot
+    src = _example()
+    first = next(e["id"] for e in src["events"] if e["type"] == "state_transition" and e["payload"].get("to") == "DECIDE")
+    tie = {"id": first - 0.5, "ts": 0.0, "type": "race_tie", "exp_id": None,
+           "payload": {"recommended": "lgbm", "tied": ["lgbm", "catboost"], "best": "catboost", "mde": 0.0099}}
+    s = snapshot({**src, "events": sorted(src["events"] + [tie], key=lambda e: e["id"])})
+    assert "lgbm、catboost 效果相当（差距 < MDE 0.0099），按偏好推荐 lgbm" in s["run"]["narration"][0]["text"]
+
+
+def test_rule_decision_and_reference_drop_in_narration():
+    """第一轮由代码按打平规则升全量：播报和轮次标出"按规则"，不能看起来像 LLM 的决策；
+    最终检验写明默认参照模型自己掉了多少（疑似过拟合按相对口径判定）。"""
+    from server.view import snapshot
+    src = _example()
+    first = next(e["id"] for e in src["events"] if e["type"] == "decision")
+    fg = next(e["id"] for e in src["events"] if e["type"] == "final_gate")
+    ev = [{**e, "payload": {**e["payload"], "by": "rule"}} if e["id"] == first else
+          {**e, "payload": {**e["payload"], "reference_drop": 0.02}} if e["id"] == fg else e for e in src["events"]]
+    s = snapshot({**src, "events": ev})
+    r = s["run"]
+    assert r["rounds"][1]["by_rule"] is True and r["rounds"][2]["by_rule"] is False
+    texts = [n["text"] for n in r["narration"]]
+    assert texts[1].startswith("第 1 轮 · 全量复验（按规则）：")
+    assert "最终检验：holdout AUC 0.731，比 OOT-dev 低 0.086（默认参照模型低 0.020，多掉 0.066），疑似对 OOT-dev 过拟合" in texts
+
+
+def test_final_narration_wording_when_holdout_is_higher():
+    """holdout 比 OOT-dev 还高时写"高"，不写"低 -0.003"（v10b lending_club）。"""
+    from server.view import _closing
+    sm = {"stop_reason": None, "final": {"holdout_auc": 0.655, "drop": -0.003, "reference_drop": -0.006, "overfit_to_oot_dev": False}}
+    t = _closing([], sm, "auc", "AUC")[0]["text"]
+    assert t == "最终检验：holdout AUC 0.655，比 OOT-dev 高 0.003（默认参照模型高 0.006，多掉 0.003）"

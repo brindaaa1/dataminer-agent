@@ -2,7 +2,7 @@ export type Status = "intake" | "intake_failed" | "config_ready" | "running" | "
 export type Stage = "intake" | "confirm" | "modeling" | "report"
 export type Tone = "ok" | "bad" | "warn" | "neutral" | "running"
 
-export interface EvalInfo { label: string; tier: string; conclusion: string | null }
+export interface EvalInfo { label: string; tier: string; conclusion: string | null; running: boolean }
 export interface TaskSummary { id: string; title: string; status: Status; created_at: number | null; example: boolean; eval: EvalInfo | null }
 export interface Question { key: string; question: string; recommended: string; display: string; required: boolean }
 export interface FieldRow { name: string; type: string; availability: string; reason: string; group: "ok" | "leak" | "quarantine" | "meta" }
@@ -15,7 +15,7 @@ export interface Round {
   key: string; title: string; action: string | null; action_label: string; verdict: string | null; codes: string[]
   metrics: { train: number | null; valid: number | null; oot_dev: number | null; oot_dev_ks: number | null; gap: number | null }
   hypothesis: string | null; alternatives: string[]; stop_reason: string | null; evaluations: Evaluation[]
-  llm_calls: number; running: boolean; trials: Record<string, Trial[]>
+  llm_calls: number; running: boolean; trials: Record<string, Trial[]>; by_rule: boolean
 }
 export interface Narration { key: string; text: string; tone: Tone }
 export interface Final {
@@ -35,10 +35,14 @@ export interface Snapshot {
 }
 export interface Evidence { ref: string; round: string | null }
 export interface ProcessRow { key: string; label: string; value: number | boolean | string | null; detail: Record<string, unknown>; evidence: Evidence[] }
-export interface RegRow { dataset: string; metric: string; new: number; old: number; delta: number; n: number; verdict: "better" | "worse" | "same"; task: string | null }
-export interface Flag { kind: string; detail: string; task: string | null }
+export interface RegRow { dataset: string; metric: string; label: string; new: number; old: number; delta: number; n: number; verdict: "better" | "worse" | "same"; task: string | null }
+export interface Flag { kind: string; label: string; detail: string; task: string | null }
+export interface SummaryRow { dataset: string; n: number; n_ok: number; holdout_mean: number | null; delta_b1_mean: number | null
+  rounds_mean: number | null; fe_in_final: string; wall_sec: number; cost_usd: number; worst_task: string | null }
 export interface RunRow { task: string; dataset: string; seed: number; status: string; holdout: number | null; delta_b1: number | null }
-export interface VersionView { label: string; tier: string; against: string | null; conclusion: string; noise_calibrated: boolean; table: RegRow[]; flags: Flag[]; runs: RunRow[] }
+export interface CostRow { dataset: string; label: string; new: number; old: number; ratio: number | null; threshold: number }
+export interface VersionView { label: string; tier: string; running: boolean; against: string | null; conclusion: string; noise_calibrated: boolean
+  table: RegRow[]; cost: CostRow[]; flags: Flag[]; runs: RunRow[]; summary: SummaryRow[] }
 export interface ScenarioRow { scenario: string; base: string; passed: boolean; reason: string; task: string }
 export interface EvalView { process: ProcessRow[]; version: VersionView | null; scenarios: ScenarioRow[] | null }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

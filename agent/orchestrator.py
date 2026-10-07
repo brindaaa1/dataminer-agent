@@ -14,7 +14,7 @@ from agent import clarify
 from agent.actions import allowed_models, apply_action, config_hash, model_profiles
 from agent.decide import DecideFailed, Validator, decide
 from agent.llm import TracedLLM, extract_json
-from agent.schemas import Plan, TaskSpec
+from agent.schemas import Decision, EstCost, Plan, TaskSpec
 from agent.states import State as S, TRANSITIONS, TERMINAL, legal
 from data.access import DataAccess
 from data.knowhow import load_knowhow
@@ -277,6 +277,8 @@ class Orchestrator:
             self.events.append("plan_invalid", {"error": str(e)[:200]})      # 规划失败不致命：没有方向也能靠 DECIDE 继续
         # 模型赛跑（§4.12）：LLM 提名候选，代码按约束过滤后在同特征集、同预算、低保真下各跑一个 study；没提名则全部赛跑
         allowed = allowed_models(self.spec)
+        # 赛跑名单限定在 race.models（v7–v10：随机森林每次 30–44 秒、几乎没赢过）；约束只允许别的模型时照旧用约束允许的
+        allowed = [m for m in allowed if m in self.cfg["race"]["models"]] or allowed
         race_models = list(dict.fromkeys(c.model for c in plan.candidate_models if c.model in allowed)) or allowed
         self.events.append("plan_candidates", {"candidates": [c.model_dump() for c in plan.candidate_models], "raced": race_models})
         for i, m in enumerate(race_models):
@@ -298,8 +300,14 @@ class Orchestrator:
                                                     "n_trials": res["n_trials"]}
             self.p["pending_leaks"].update(out["leaks"])
         pm = primary(self.cfg)
-        best_race = max(self.p["race"], key=lambda e: self._result(e)["metrics"][f"oot_dev_{pm}"]) if self.p["race"] else None
-        self.p["current_node"] = best_race
+        ok = [e for e in self.p["race"] if self.store.get(e).verdict != "REJECT"] or self.p["race"]
+        if ok:
+            from evaluation.ties import race_tie
+            scores = {self.store.get(e).diff["model"]: self._result(e)["metrics"][f"oot_dev_{pm}"] for e in ok}
+            tie = race_tie(scores, (self.p.get("oot_power") or {}).get("mde", 0.0), self.cfg["race"]["tie_preference"])
+            self.p["race_tie"] = tie
+            self.events.append("race_tie", tie)
+        self.p["current_node"] = f"{self.task_id}_race_{self.p['race_tie']['recommended']}" if ok else None
         try:
             from features.factory import load_templates, supported
             self.p["templates"] = [k for k, t in load_templates(self.spec.dataset, self.cfg).items() if supported(t)]
@@ -351,6 +359,28 @@ class Orchestrator:
                            exp_id=res.get("exp_id"))
         return out
 
+    def _race_promotion(self):
+        """赛跑后的第一次升全量由代码做：升打平规则推荐的那个，不调 LLM（v7–v9：第 1 轮都是升赛跑模型）。"""
+        p, tie = self.p, self.p.get("race_tie")
+        if p["best_exp_id"] or not tie or p.get("race_promoted") or not self.cfg["race"]["rule_first_promotion"]:
+            return None
+        p["race_promoted"] = True
+        others = [m for m in tie["tied"] if m != tie["recommended"]]
+        why = (f"赛跑打平：{'、'.join(tie['tied'])} 与最优差距小于 MDE {tie['mde']:.4f}，效果相当；按偏好顺序推荐 {tie['recommended']}"
+               if others else f"赛跑中 {tie['recommended']} 明显领先（其余模型差距 ≥ MDE {tie['mde']:.4f}）")
+        d = Decision(action="PROMOTE_FIDELITY", params={"exp_id": f"{self.task_id}_race_{tie['recommended']}"},
+                     hypothesis=f"{why}；升到全量复验，得到第一个最终模型", expected_gain="第一个全保真最终模型",
+                     est_cost=EstCost(), rationale="规则：赛跑后第一次升全量按打平规则选模型（evaluation/ties.py）")
+        self.events.append("decision", {"attempt": 0, "decision": d.model_dump(mode="json"), "by": "rule"})
+        return d, 0
+
+    def _llm_decide(self):
+        p = self.p
+        n_rows = len(DataAccess(self.spec.dataset, str(self.art)).load("train"))
+        ctx = build_context(self.store, p, self.cfg, self.spec, self.evaluator.budget, self._remaining(), model_profiles(self.spec))
+        v = Validator(self.cfg, self.spec, self.store, p, self._remaining(), n_rows)
+        return decide(self.llm, ctx, v, self.cfg, on_event=lambda t, pl: self.events.append(t, pl))
+
     def _decide(self):
         p = self.p
         if p["current_node"] is None:                                   # 预算不够跑任何实验：直接收尾，不让 LLM 空转
@@ -362,11 +392,8 @@ class Orchestrator:
             self.events.append("auto_quarantine", p["pending_leaks"])
             p["pending_leaks"] = {}
         recs = {r.exp_id: r for r in self.store.all(self.task_id)}
-        n_rows = len(DataAccess(self.spec.dataset, str(self.art)).load("train"))
-        ctx = build_context(self.store, p, self.cfg, self.spec, self.evaluator.budget, self._remaining(), model_profiles(self.spec))
-        v = Validator(self.cfg, self.spec, self.store, p, self._remaining(), n_rows)
         try:
-            d, toks = decide(self.llm, ctx, v, self.cfg, on_event=lambda t, pl: self.events.append(t, pl))
+            d, toks = self._race_promotion() or self._llm_decide()
         except DecideFailed as e:
             p["await"] = {"reason": "decide_failed", "errors": e.errors}
             if p["best_exp_id"]:              # 已有最终模型：带着原因正常收尾，不丢成绩（v2 评测 lending_club s2）
@@ -455,6 +482,7 @@ class Orchestrator:
         p, pd = self.p, self.p["pending"]
         d, res, ev = pd["decision"], pd.get("result"), pd.get("eval")
         ok = res is not None and res.get("status") == "OK"
+        worth = False
         verdict = ev["verdict"] if ok else "NONE"
         p["last_failure"] = None if ok or not res else res.get("error")        # 失败原因回灌给下一轮 DECIDE（否则 LLM 不知道怎么改）
         codes = ev["codes"] if ok else ([res["status"]] if res else [])
@@ -471,9 +499,12 @@ class Orchestrator:
         if ok:
             bud.spend(p["budget"], cpu_minutes=res["cost"]["wall_minutes"] * self.cfg["inner_loop"]["n_threads"],
                       wall_minutes=res["cost"]["wall_minutes"])
-            mark = history_mark(verdict, res.get("fidelity"), (ev.get("compare") or {}).get("delta"))
+            mark = history_mark(verdict, res.get("fidelity"), (ev.get("compare") or {}).get("delta"), self._min_up())
             p["history_verdicts"].append(mark)
-            if p["best_exp_id"] and res.get("fidelity") == "low" and mark in ("PROMISING", "INCONCLUSIVE_UP"):
+            delta = (ev.get("compare") or {}).get("delta")
+            worth = bool(p["best_exp_id"] and res.get("fidelity") == "low" and mark in ("PROMISING", "INCONCLUSIVE_UP")
+                         and delta is not None and delta >= self._min_up())    # 差距 < MDE 是打平，升全量大概率仍不确定
+            if worth:
                 p.setdefault("promote_hint", []).append(pd["exp_id"])       # 值得升全量复验（evaluation/guardrails.promote_candidates）
             p["last_codes"] = codes
             if ev["leaks"]:
@@ -481,10 +512,15 @@ class Orchestrator:
             if verdict == "ACCEPT":
                 p["best_exp_id"] = p["current_node"] = pd["exp_id"]
         p["round_no"] += 1
-        self.events.append("recorded", {"verdict": verdict, "codes": codes, "action": d["action"],
+        self.events.append("recorded", {"verdict": verdict, "codes": codes, "action": d["action"], **({"mark": mark, "worth": worth} if ok else {}),
                                         **({"error": p["last_failure"]} if p["last_failure"] else {})}, exp_id=pd["exp_id"])
         p["pending"] = None
         return S.STOP_CHECK
+
+    def _min_up(self):
+        """低保真"不确定但更高"至少要高这么多，才不计入停止计数、才提示升全量（evaluation/stop.history_mark）。"""
+        pw = self.p.get("oot_power")
+        return self.cfg["evaluator"]["inconclusive_up_mde_frac"] * pw["mde"] if pw else 0.0
 
     def _stop_check(self):
         p = self.p

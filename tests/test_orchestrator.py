@@ -49,9 +49,11 @@ def test_decide_retries_with_feedback_then_succeeds(toy_cfg):
 
 def test_decide_exhausts_retries_l1_awaits_l0_fails(toy_cfg):
     junk = lambda u: "garbage" if '"mode": "DECIDE"' in u else {"directions": []}
+    toy_cfg["race"]["rule_first_promotion"] = False                      # 测还没有最终模型时 LLM 决策失败的路径
     o = build(toy_cfg, ScriptedLLM(junk))
     assert o.run() == State.AWAIT_HUMAN and o.p["await"]["reason"] == "decide_failed"
     cfg2 = make_toy(Path(toy_cfg["paths"]["artifacts_root"]).parent / "l0")
+    cfg2["race"]["rule_first_promotion"] = False
     o2 = build(cfg2, ScriptedLLM(junk), task="t2", autonomy="L0")
     assert o2.run() == State.FAILED
 
@@ -253,6 +255,7 @@ def test_no_final_model_nudges_promotion(toy_cfg):
             return dict(base, action="PROMOTE_FIDELITY", params={"exp_id": ctx["final_model"]["promotable"][0]["exp_id"]}, rationale="r" * 30)
         return dict(base, action="STOP", params={"reason": "done"}, rationale="r" * 30)
 
+    toy_cfg["race"]["rule_first_promotion"] = False                      # 测的是还没有最终模型时给 LLM 的提示
     o = build(toy_cfg, ScriptedLLM(script))
     assert o.run() == State.DONE
     first = ctxs[0]
@@ -272,12 +275,17 @@ STOP = {"action": "STOP", "params": {"reason": "x"}, "hypothesis": "h", "expecte
         "est_cost": {"tokens": 0, "cpu_minutes": 0}, "rationale": "stop"}
 
 
-def _raced(cfg, plan, task_id, **spec_kw):
+def _raced(cfg, plan, task_id, keep_models=False, **spec_kw):
+    """keep_models=False：赛跑名单放开到全部模型，只测 LLM 提名与约束的交集。"""
     from agent.llm import last_json_block
+    from modeling.zoo import ZOO
+    if not keep_models:
+        cfg["race"]["models"] = list(ZOO)
 
     def llm(user):
         ctx = last_json_block(user)
         return plan(ctx) if ctx.get("mode") == "PLAN" else STOP
+    cfg["race"]["rule_first_promotion"] = False                          # 只看赛跑本身；不升全量、不跑最终检验
     o = Orchestrator(toy_spec(cfg, autonomy="L0", **spec_kw), cfg, ScriptedLLM(llm), None, task_id)
     o.run()
     return o, {r.config["model"] for r in o.store.all(task_id) if r.action_type == "RACE"}
@@ -321,6 +329,7 @@ def test_decide_context_keeps_templates_and_model_profiles(toy_cfg):
             return plan(ctx)
         seen.setdefault("ctx", ctx)
         return STOP
+    toy_cfg["race"]["rule_first_promotion"] = False
     o = Orchestrator(toy_spec(toy_cfg, autonomy="L0"), toy_cfg, ScriptedLLM(llm), None, "tpl")
     o.run()
     assert "templates" in seen["ctx"] and isinstance(seen["ctx"]["models_available"], dict)
@@ -474,3 +483,30 @@ def test_profile_reports_oot_power_and_warns_when_underpowered(toy_cfg):
     ev = o.events.query("oot_power")[0]["payload"]
     assert 0 < ev["mde"] < 0.5 and ev["n_pos"] > 0 and ev["underpowered"] is True and "OOT-dev" in ev["warning"]
     assert seen[0]["oot_power"]["mde"] == ev["mde"]
+
+
+def test_first_promotion_follows_race_tie_without_llm(toy_cfg):
+    """赛跑后第一次升全量由代码按打平规则做，不调 LLM：20 次运行第 1 轮都是升赛跑模型，LLM 在打平的模型里挑等于按噪声挑。"""
+    toy_cfg["evaluator"]["overfit_gap"] = {"mode": "relative", "tolerance": 0.05}
+    o = build(toy_cfg, PolicyMockLLM())
+    assert o.run() == State.DONE
+    tie = o.p["race_tie"]
+    assert tie["recommended"] in tie["tied"] and o.events.query("race_tie")
+    first = next(r for r in o.store.all("t1") if r.action_type != "RACE")
+    assert first.action_type == "PROMOTE_FIDELITY" and first.diff["exp_id"] == f"t1_race_{tie['recommended']}"
+    ev = o.events.query()
+    first_dec = next(e for e in ev if e["type"] == "decision")
+    assert first_dec["payload"]["by"] == "rule"
+    assert not any(e["type"] == "llm_call" and e["payload"].get("stage") == "DECIDE" for e in ev if e["id"] < first_dec["id"])
+
+
+def test_race_is_limited_to_configured_models(toy_cfg):
+    """v7–v10：随机森林每次赛跑 30–44 秒，20 次运行几乎没赢过。赛跑默认只在 race.models 里选；约束只允许别的模型（如高可解释性只能评分卡）时照旧。"""
+    toy_cfg["race"]["models"] = ["lgbm", "catboost"]
+    plan = lambda ctx: {"directions": [], "candidate_models": [{"model": "lgbm", "reason": "r"}, {"model": "random_forest", "reason": "r"}]}
+    _, raced = _raced(toy_cfg, plan, "rm1", keep_models=True)
+    assert raced == {"lgbm"}
+    _, raced = _raced(toy_cfg, lambda ctx: {"directions": []}, "rm2", keep_models=True)
+    assert raced == {"lgbm", "catboost"}
+    _, raced = _raced(toy_cfg, lambda ctx: {"directions": []}, "rm3", keep_models=True, constraints={"interpretability": "high"})
+    assert raced == {"lr_scorecard"}

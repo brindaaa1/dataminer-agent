@@ -119,6 +119,7 @@ def test_expand_features_integrates_into_decide_loop(toy_cfg):
         if ctx.get("mode") != "DECIDE":
             return {"lessons": []}
         return ok("EXPAND_FEATURES", {"code": GOOD_CODE}) if ctx["round_no"] == 1 else ok("STOP", {"reason": "x"})
+    toy_cfg["race"]["rule_first_promotion"] = False                      # 脚本按 LLM 的第 1 轮写
     o = Orchestrator(toy_spec(toy_cfg), toy_cfg, ScriptedLLM(script), FinalGate("toy", toy_cfg, "t_expand"), "t_expand")
     from agent.states import State
     assert o.run() == State.DONE
@@ -138,6 +139,7 @@ def test_expand_features_failure_is_recorded_not_crashed(toy_cfg):
         if ctx["round_no"] == 1:
             return ok("EXPAND_FEATURES", {"code": BAD_CODE})
         return ok("STOP", {"reason": "x"})
+    toy_cfg["race"]["rule_first_promotion"] = False                      # 脚本按 LLM 的第 1 轮写
     o = Orchestrator(toy_spec(toy_cfg), toy_cfg, ScriptedLLM(script), FinalGate("toy", toy_cfg, "t_fail"), "t_fail")
     from agent.states import State
     assert o.run() == State.DONE

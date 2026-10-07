@@ -1,5 +1,7 @@
 """一次评测运行：手写 know-how（跳过 LLM 起草接入），L0，固定设置；产物放 data_raw/eval_runs/<label>/<数据集>/s<种子>/。
 每个种子一个目录（切分、state.db、经验库都独立），可以单独补跑某个种子；基线放 <数据集>/baselines/。"""
+import json
+import os
 import shutil
 from pathlib import Path
 
@@ -20,7 +22,7 @@ from runtime.events import EventLog
 from runtime.tracing import make_tracer
 
 RUNS = ROOT / "data_raw" / "eval_runs"
-SETTINGS = {"max_rounds": 8, "low_sample_frac": 0.3, "low_trials": 10, "full_trials": 20, "split_seed": 42, "autonomy": "L0"}
+SETTINGS = {"max_rounds": 6, "low_sample_frac": 0.3, "low_trials": 10, "full_trials": 20, "split_seed": 42, "autonomy": "L0"}
 
 
 def art_dir(label: str, name: str, seed: int | str):
@@ -49,6 +51,8 @@ def build_cfg(name: str, label: str, seed: int, sub: str | None = None) -> dict:
     cfg["split"]["seed"] = SETTINGS["split_seed"]
     cfg["fidelity"]["low"].update(sample_frac=SETTINGS["low_sample_frac"], n_trials=SETTINGS["low_trials"])
     cfg["fidelity"]["full"]["n_trials"] = SETTINGS["full_trials"]
+    # --jobs 并行时各进程分核，不然抢 CPU 把预算耗光（v11 第一次并行，hotel s0 因超预算失败）
+    cfg["inner_loop"]["n_threads"] = max(1, cfg["inner_loop"]["n_threads"] // int(os.environ.get("DATAMINER_EVAL_JOBS", "1")))
     return cfg
 
 
@@ -112,15 +116,23 @@ def run_agent(name: str, label: str, seed: int, provider: str, llm=None, tracer=
     return {"dataset": name, "seed": seed, **row}
 
 
-def run_baselines(name: str, label: str, agent_wall: list[float]) -> dict:
-    """B0 与种子无关，跑一次；B1 的时间预算对齐 agent 各种子耗时的中位数（偶数个取较小的），至少 30 秒。"""
+B1_BUDGET_SEC = 300.0     # B1 固定预算：与 agent 代码无关，按数据集缓存，换版本直接复用
+
+
+def run_baselines(name: str, label: str) -> dict:
+    """B0、B1 与 agent 代码无关：按数据集 + 切分种子 + B1 预算缓存（v9/v10：hotel 的 B1 每个版本重跑 7 分钟以上，
+    预算还随 agent 用时变，"比 B1"跟着抖）。数据或基线代码改了，删掉 RUNS/_baselines 下对应文件即可重算。"""
+    cache = RUNS / "_baselines" / f"{name}_split{SETTINGS['split_seed']}_b1{int(B1_BUDGET_SEC)}.json"
+    if cache.exists():
+        return json.loads(cache.read_text())
     prepare_run(label, name, "baselines")
     cfg, ds = build_cfg(name, label, 0, "baselines"), DATASETS[name]["dataset"]
     build_splits(ds, cfg)                           # 基线目录独立：切分自己生成（与 agent 同一切分种子，结果一致）
-    w = sorted(agent_wall)
-    budget = max(w[(len(w) - 1) // 2] if w else 0.0, 30.0)
-    return {"b0": b0_default_lgbm.run(ds, cfg, name=f"b0_{label}_{name}"),
-            "b1": b1_automl.run(ds, cfg, budget, name=f"b1_{label}_{name}")}
+    out = {"b0": b0_default_lgbm.run(ds, cfg, name=f"b0_{label}_{name}"),
+           "b1": b1_automl.run(ds, cfg, B1_BUDGET_SEC, name=f"b1_{label}_{name}")}
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(out, ensure_ascii=False, default=float))
+    return out
 
 
 SCENARIO_SETTINGS = {"max_rounds": 5, "n_rows": 20_000, "seed": 0}     # 情景运行求快：抽 2 万行、1 个种子、5 轮

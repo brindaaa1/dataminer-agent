@@ -48,6 +48,11 @@ class Validator:
             kind, new_cfg, _ = apply_action(a, d.params, node, recs, self.spec, self.p["quarantined"])
         except ActionError as e:
             return errs + [str(e)]
+        src = recs.get(d.params.get("exp_id")) if a == "PROMOTE_FIDELITY" else None
+        if src and self.p.get("best_exp_id") and src.action_type != "RACE" and src.exp_id not in self.p.get("promote_hint", []):
+            mde = (self.p.get("oot_power") or {}).get("mde")      # v7–v10：这类升全量 19 次 0 次采纳
+            errs.append(f"{src.exp_id} 在低保真上比最优高出不到可分辨的最小提升（MDE {mde}），算打平：升到全量大概率仍是不确定，白花一次全量训练。"
+                        "只有 promotable 里标为值得升的（差距 ≥ MDE）才能升；其他赛跑模型可以升；或换方向、STOP")
         if kind == "train":
             h = config_hash(new_cfg)
             if h in self.store.taboo_hashes(self.p["task_id"]):     # 点名撞的是哪个实验，LLM 才知道怎么改（否则会反复撞同一个）

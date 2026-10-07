@@ -47,7 +47,7 @@ export function TaskRail({ tasks, current, onSelect }: { tasks: TaskSummary[]; c
           return (
             <li key={label}>
               <details open={ts.some((t) => t.id === current)}>
-                <summary className="cursor-pointer px-4 py-1 text-sm">{[label, e.tier, e.conclusion].filter(Boolean).join(" · ")}</summary>
+                <summary className="cursor-pointer px-4 py-1 text-sm">{[label, e.tier, e.running ? "运行中" : e.conclusion].filter(Boolean).join(" · ")}</summary>
                 <ul className="pl-2">{ts.map((t) => <Item key={t.id} t={t} current={current} open={open} onSelect={onSelect} />)}</ul>
               </details>
             </li>

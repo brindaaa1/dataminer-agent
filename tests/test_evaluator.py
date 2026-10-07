@@ -100,6 +100,17 @@ def test_low_fidelity_gain_without_significance_does_not_count_as_no_progress(tm
     assert history_mark("REJECT", "low", 0.004) == "REJECT"
 
 
+def test_tiny_low_fidelity_gain_counts_as_no_progress(tmp_path):
+    """v8 评测 lending_club：低保真有行数下限后和全量几乎一样，候选与对照的差在 ±0.002 抛硬币，
+    差 > 0 就不计入停止计数会让 agent 停不下来（两个种子都跑满 8 轮）。差要到 min_up（0.5×MDE）才算"更高"。"""
+    b = OOTBudget({"oot_budget": {"alpha_0": .05, "max_compares": 9, "policy": "log"}}, str(tmp_path / "s.db"), "t")
+    kw = dict(cfg=CFG, oot_budget=b, round_no=4, max_rounds=10, remaining={"tokens": 1, "cpu_minutes": 1, "wall_minutes": 1}, best_score=0.8)
+    tiny = history_mark("INCONCLUSIVE", "low", 0.002, min_up=0.005)
+    assert tiny == "INCONCLUSIVE"
+    assert stop_check(**kw, history_verdicts=["INCONCLUSIVE", "INCONCLUSIVE", tiny]) == "NO_PROGRESS"
+    assert history_mark("INCONCLUSIVE", "low", 0.006, min_up=0.005) == "INCONCLUSIVE_UP"
+
+
 def test_too_many_features_counts_added_features_not_raw_width():
     """v5 评测 home_credit：主表原始特征就有 122 个，固定上限 60 让包括赛跑在内的全部实验被拒，没有最终模型。
     护栏防的是特征工程失控：有原始特征数时按『新增了多少』算，没有时退回总数上限。"""

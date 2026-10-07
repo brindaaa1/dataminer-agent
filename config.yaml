@@ -88,6 +88,7 @@ evaluator:
   bootstrap_seed: 0
   mde: {target: 0.01, power: 0.8, auc_corr: 0.82}   # OOT-dev 能分辨的最小提升；auc_corr：同一 OOT 上两个候选 AUC 的相关（v5 实测 SE_Δ/SE 0.3–0.6，取 0.6 ↔ 0.82）
   no_progress_rounds: 3        # NO_PROGRESS：连续 N 轮 REJECT/INCONCLUSIVE
+  inconclusive_up_mde_frac: 1.0   # 低保真比对照高 ≥ 该比例 × MDE 才算更好：不计入 NO_PROGRESS、才能升全量；差距更小是打平
   budget_low_frac: 0.15
   plateau_ci_hint: true
   early_stop_min_frac: 0.05    # NO_CONVERGE：最佳迭代数 < n_rounds_max × 该比例（几乎没学到东西）
@@ -99,7 +100,7 @@ oot_budget:
   policy: log                  # alpha_k = alpha_0 / (1 + ln k)
 
 final_gate:
-  delta: 0.02                  # holdout 比 OOT-dev 低超过此值 → 标注"疑似对 OOT-dev 过拟合"
+  delta: 0.02                  # holdout 比 OOT-dev 低得比默认参照模型（overfit_gap.mode=relative 时）多出此值 → 标注"疑似对 OOT-dev 过拟合"
 
 decide:
   max_retries: 3               # LLM 输出校验失败后的重试次数
@@ -107,8 +108,12 @@ decide:
   topk: 3                      # 上下文中"最优 k 条 / 最近被拒 k 条"
   policy_deviation_min_rationale_chars: 20
 
+race:
+  models: [lgbm, catboost]     # 赛跑只在这些模型里选（LLM 提名取交集）；随机森林、评分卡之后仍可 SWITCH_MODEL
+  tie_preference: [lgbm, random_forest, lr_scorecard, catboost]   # 赛跑打平（差距 < MDE）时按这个顺序推荐；行业里越常见越靠前
+  rule_first_promotion: true   # 赛跑后第一次升全量由代码按打平规则做，不调 LLM
 run:
-  max_rounds: 12
+  max_rounds: 6
   budget: {tokens: 200000, cpu_minutes: 240, wall_minutes: 120}
 
 llm:
@@ -121,6 +126,9 @@ llm:
     deepseek-flash: {input_cache_miss: 0.14, input_cache_hit: 0.0028, output: 0.28}
   model: claude-sonnet-5      # 兼容旧字段
   max_tokens: 2000
+  timeout_sec: 120            # 单次调用超时；SDK 默认 600 秒，断线时一轮会卡半小时以上（推理模式正常 ≤ 60 秒）
+  deadline_sec: 180            # 单次调用的总时长上限（timeout_sec 只管两次收到数据的间隔）；正常最长约 110 秒
+  deadline_retries: 2          # 超过总时长后重新发起的次数
   max_retries: 6              # 断网/超时时 SDK 自动重试（指数退避）；默认 2 次在网络不稳时会让整次运行作废
   decide_temperature: 0.0
 

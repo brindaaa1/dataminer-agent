@@ -1,0 +1,248 @@
+{
+ "label": "v10a",
+ "tier": "fast",
+ "status": "done",
+ "settings": {
+  "max_rounds": 6,
+  "low_sample_frac": 0.3,
+  "low_trials": 10,
+  "full_trials": 20,
+  "split_seed": 42,
+  "autonomy": "L0",
+  "llm": "deepseek",
+  "scenario": {
+   "max_rounds": 5,
+   "n_rows": 20000,
+   "seed": 0
+  }
+ },
+ "git": {
+  "sha": "dbc6d942c5fc4b01dd4a0d2398fb7fe422b58dc4",
+  "dirty": true
+ },
+ "started": 1791283162.771994,
+ "finished": 1791283556.724419,
+ "wall_sec": 281.1,
+ "cost_usd": 0.008570503200000001,
+ "datasets": {
+  "lending_club": {
+   "baselines": {
+    "b0": {
+     "name": "b0_v10a_lending_club",
+     "oot_dev_auc": 0.6410340843621717,
+     "oot_dev_ks": 0.2086977425847883,
+     "holdout_auc": 0.6473875093262106,
+     "wall_sec": 0.13462400436401367,
+     "n_features": 35,
+     "best_iter": 32
+    },
+    "b1": {
+     "name": "b1_v10a_lending_club",
+     "oot_dev_auc": 0.6521915056546174,
+     "oot_dev_ks": 0.22272246150294406,
+     "holdout_auc": 0.6585967930580371,
+     "wall_sec": 108.70714282989502,
+     "n_features": 35,
+     "best_estimator": "lgbm",
+     "time_budget": 108.7,
+     "best_config": {
+      "n_estimators": 293,
+      "num_leaves": 9,
+      "min_child_samples": 25,
+      "learning_rate": 0.04553170210941156,
+      "log_max_bin": 8,
+      "colsample_bytree": 0.676281211713299,
+      "reg_alpha": 0.19842026156048442,
+      "reg_lambda": 1.8857120252201518
+     }
+    }
+   },
+   "runs": [
+    {
+     "seed": 0,
+     "status": "ok",
+     "error": null,
+     "final_model": "lgbm",
+     "holdout": 0.6596975811425629,
+     "oot_dev": 0.6524296354928375,
+     "overfit": false,
+     "stop_reason": "NO_PROGRESS",
+     "n_rounds": 4,
+     "wall_sec": 172.4,
+     "cost_usd": 0.004400144,
+     "task_id": "v10a_lending_club_s0",
+     "process": {
+      "rounds": {
+       "value": 4,
+       "max": 6,
+       "stop_reason": "NO_PROGRESS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.0,
+       "n": 0,
+       "evidence": []
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": null,
+       "worth": [],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": 0.5,
+       "evidence": [
+        "v10a_lending_club_s0_e01",
+        "v10a_lending_club_s0_e02"
+       ]
+      },
+      "final_lineage": {
+       "value": "赛跑 lgbm → 升全量",
+       "evidence": [
+        "v10a_lending_club_s0_race_lgbm",
+        "v10a_lending_club_s0_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 2,
+       "kept": 2,
+       "promising": 0,
+       "promoted": 0,
+       "accepted": 0,
+       "evidence": [
+        "v10a_lending_club_s0_e03",
+        "v10a_lending_club_s0_e04"
+       ]
+      },
+      "recovery": {
+       "value": null,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 5,
+       "last_alpha": 0.01916121466686275,
+       "mde": 0.0099,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.004400144,
+       "wall_sec": 172.4,
+       "tokens": 24669,
+       "sec_per_round": 43.1,
+       "evidence": []
+      }
+     }
+    },
+    {
+     "seed": 1,
+     "status": "ok",
+     "error": null,
+     "final_model": "lgbm",
+     "holdout": 0.6615705987564585,
+     "oot_dev": 0.6544659264595695,
+     "overfit": false,
+     "stop_reason": "NO_PROGRESS",
+     "n_rounds": 4,
+     "wall_sec": 108.7,
+     "cost_usd": 0.004170359200000001,
+     "task_id": "v10a_lending_club_s1",
+     "process": {
+      "rounds": {
+       "value": 4,
+       "max": 6,
+       "stop_reason": "NO_PROGRESS",
+       "evidence": []
+      },
+      "wasted_rounds": {
+       "value": 0.0,
+       "n": 0,
+       "evidence": []
+      },
+      "rejected_decisions": {
+       "value": 0,
+       "by_kind": {},
+       "evidence": []
+      },
+      "decide_failed": {
+       "value": false,
+       "rounds_lost": 0,
+       "evidence": []
+      },
+      "upgrade_hit_rate": {
+       "value": null,
+       "worth": [],
+       "unreachable": [],
+       "evidence": []
+      },
+      "upgrade_success_rate": {
+       "value": 1.0,
+       "evidence": [
+        "v10a_lending_club_s1_e01"
+       ]
+      },
+      "final_lineage": {
+       "value": "赛跑 lgbm → 升全量",
+       "evidence": [
+        "v10a_lending_club_s1_race_lgbm",
+        "v10a_lending_club_s1_e01"
+       ]
+      },
+      "fe_funnel": {
+       "value": false,
+       "attempts": 2,
+       "kept": 2,
+       "promising": 0,
+       "promoted": 0,
+       "accepted": 0,
+       "evidence": [
+        "v10a_lending_club_s1_e03",
+        "v10a_lending_club_s1_e04"
+       ]
+      },
+      "recovery": {
+       "value": null,
+       "evidence": []
+      },
+      "human": {
+       "value": 0,
+       "confirmed": 0,
+       "evidence": []
+      },
+      "oot": {
+       "value": 5,
+       "last_alpha": 0.01916121466686275,
+       "mde": 0.0099,
+       "underpowered": false,
+       "evidence": []
+      },
+      "cost": {
+       "value": 0.004170359200000001,
+       "wall_sec": 108.7,
+       "tokens": 24151,
+       "sec_per_round": 27.2,
+       "evidence": []
+      }
+     }
+    }
+   ]
+  }
+ },
+ "scenarios": []
+}

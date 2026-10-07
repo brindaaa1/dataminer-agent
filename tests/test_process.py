@@ -89,3 +89,22 @@ def test_last_round_candidate_is_unreachable_not_a_miss():
     m = process_metrics(events, records, max_rounds=8)
     assert m["upgrade_hit_rate"]["worth"] == ["e02"] and m["upgrade_hit_rate"]["unreachable"] == ["e07"]
     assert m["upgrade_hit_rate"]["value"] == 1.0
+
+
+def test_worth_promoting_follows_agent_mark():
+    """agent 记下的标记（recorded.mark）为准：差太小（< 0.5×MDE）标成 INCONCLUSIVE 的，不算"值得升"，
+    和 agent 停止计数、升全量提示同一口径。旧运行没有 mark，仍按差 > 0。"""
+    events, records = run()
+    events = [{**e, "payload": {**e["payload"], "mark": "INCONCLUSIVE"}} if e["type"] == "recorded" and e["exp_id"] == "e02" else e
+              for e in events]
+    m = process_metrics(events, records, max_rounds=8)
+    assert m["upgrade_hit_rate"]["worth"] == [] and m["fe_funnel"]["promising"] == 0
+
+
+def test_upgrade_success_excludes_the_first_final_model():
+    """第一次升全量（还没有最终模型时）几乎总被采纳，算进去会把成功率抬高；只看已有最终模型之后的升全量。"""
+    m = process_metrics(*run(), max_rounds=8)
+    assert m["upgrade_success_rate"]["evidence"] == ["e06"] and m["upgrade_success_rate"]["value"] == 1.0
+    events, records = run()
+    records = records[:2]                                     # 只有赛跑 + 第一次升全量
+    assert process_metrics(events, records, max_rounds=8)["upgrade_success_rate"]["value"] is None

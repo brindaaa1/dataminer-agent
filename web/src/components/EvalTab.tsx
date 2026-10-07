@@ -54,18 +54,39 @@ export function EvalTab({ snap, onTrace, onSelect }: { snap: Snapshot; onTrace: 
       {view === "version" && v && (
         <div className="space-y-3 text-sm">
           <p><b>{v.conclusion}</b>{v.against && `（对比 ${v.against}，${v.tier} 档${v.noise_calibrated ? "" : "，噪声带未校准"}）`}</p>
+          {v.summary.length > 0 && (
+            <table className="w-full"><thead className="text-left text-muted-foreground">
+              <tr><th>数据集</th><th>成功</th><th>平均 holdout</th><th>比 B1</th><th>平均轮数</th><th>特征工程进最终</th><th>用时（秒）</th><th>花费（美元）</th><th /></tr></thead>
+              <tbody className="divide-y">{v.summary.map((s) => (
+                <tr key={s.dataset}>
+                  <td>{s.dataset}</td><td>{s.n_ok}/{s.n}</td><td>{s.holdout_mean?.toFixed(3) ?? "—"}</td>
+                  <td>{s.delta_b1_mean === null ? "—" : `${s.delta_b1_mean >= 0 ? "+" : ""}${s.delta_b1_mean.toFixed(3)}`}</td>
+                  <td>{s.rounds_mean?.toFixed(1) ?? "—"}</td><td>{s.fe_in_final}</td><td>{Math.round(s.wall_sec)}</td><td>{s.cost_usd.toFixed(4)}</td>
+                  <td>{s.worst_task && <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => onSelect(s.worst_task!)}>最差的一次</Button>}</td>
+                </tr>))}</tbody></table>
+          )}
           {v.table.length > 0 && (
             <table className="w-full"><thead className="text-left text-muted-foreground">
               <tr><th>数据集</th><th>指标</th><th>新</th><th>旧</th><th>差</th><th>判定</th></tr></thead>
               <tbody className="divide-y">{v.table.map((t) => (
                 <tr key={t.dataset + t.metric} className={cn(t.task && "cursor-pointer hover:bg-accent")} onClick={() => t.task && onSelect(t.task)}>
-                  <td>{t.dataset}</td><td>{t.metric}</td><td>{t.new}</td><td>{t.old}</td><td>{t.delta > 0 ? `+${t.delta}` : t.delta}</td>
+                  <td>{t.dataset}</td><td>{t.label}</td><td>{t.new}</td><td>{t.old}</td><td>{t.delta > 0 ? `+${t.delta}` : t.delta}</td>
                   <td className={VERDICT[t.verdict][1]}>{VERDICT[t.verdict][0]}</td>
+                </tr>))}</tbody></table>
+          )}
+          {v.cost.length > 0 && (
+            <table className="w-full"><thead className="text-left text-muted-foreground">
+              <tr><th>数据集</th><th>用时与花费</th><th>新</th><th>旧</th><th>倍数</th><th>标记阈值</th></tr></thead>
+              <tbody className="divide-y">{v.cost.map((c) => (
+                <tr key={c.dataset + c.label}>
+                  <td>{c.dataset}</td><td>{c.label}</td><td>{Number(c.new.toPrecision(4))}</td><td>{Number(c.old.toPrecision(4))}</td>
+                  <td className={cn(c.ratio !== null && c.ratio > c.threshold && "text-red-600")}>{c.ratio === null ? "—" : `×${c.ratio}`}</td>
+                  <td>×{c.threshold}</td>
                 </tr>))}</tbody></table>
           )}
           {v.flags.length > 0 && (
             <ul className="list-disc pl-5">{v.flags.map((f, i) => (
-              <li key={i}>{f.kind}：{f.detail}{f.task && <button className="ml-2 text-primary" onClick={() => onSelect(f.task!)}>看这次运行</button>}</li>))}</ul>
+              <li key={i}>{f.label}：{f.detail}{f.task && <button className="ml-2 text-primary" onClick={() => onSelect(f.task!)}>看这次运行</button>}</li>))}</ul>
           )}
           <table className="w-full"><thead className="text-left text-muted-foreground"><tr><th>运行</th><th>状态</th><th>holdout</th><th>比 B1</th></tr></thead>
             <tbody className="divide-y">{v.runs.map((r) => (

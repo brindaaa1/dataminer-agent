@@ -112,6 +112,7 @@ def _round(s: dict, row: dict, recs: dict, trials: dict, pm: str, running: bool)
                              "verdict": e.get("verdict"), "codes": e.get("codes") or [],
                              "oot_dev": (e.get("metrics") or {}).get(f"oot_dev_{pm}")} for e in evs],
             "llm_calls": len(s["llm_calls"]), "running": running and not s["recorded"] and action != "STOP",
+            "tie": next((e["payload"] for e in s["events"] if e["type"] == "race_tie"), None), "by_rule": s["by_rule"],
             "trials": {e: trials.get(e, []) for e in s["exp_ids"]}}
 
 
@@ -119,9 +120,11 @@ def _say(rd: dict, kind: str, L: str) -> dict:
     """每轮在对话里播报一句。模板拼接，不调 LLM。"""
     if kind == PHASE_SETUP:
         parts = [f"{e['model']} 时间外 {L} {_f(e['oot_dev'])}（{VERDICT.get(e['verdict'], '—')}）" for e in rd["evaluations"]]
-        return {"key": rd["key"], "text": "模型赛跑：" + ("；".join(parts) or "运行中…"),
+        t = rd["tie"]
+        tail = f"。{'、'.join(t['tied'])} 效果相当（差距 < MDE {t['mde']:.4f}），按偏好推荐 {t['recommended']}" if t and len(t["tied"]) > 1 else ""
+        return {"key": rd["key"], "text": "模型赛跑：" + ("；".join(parts) or "运行中…") + tail,
                 "tone": "running" if rd["running"] else "neutral"}
-    head = f"{rd['title']} · {rd['action_label']}"
+    head = f"{rd['title']} · {rd['action_label']}" + ("（按规则）" if rd["by_rule"] else "")
     if rd["action"] == "STOP":
         return {"key": rd["key"], "text": f"{rd['title']} · 停止：{_cut(rd['stop_reason'])}", "tone": "neutral"}
     if rd["running"]:
@@ -134,6 +137,11 @@ def _say(rd: dict, kind: str, L: str) -> dict:
     return {"key": rd["key"], "text": text, "tone": TONE.get(v, "neutral")}
 
 
+def _lower(drop) -> str:
+    """OOT-dev → holdout 的变化：drop 为正是"低"，为负是"高"（holdout 比 OOT-dev 还好）。"""
+    return "—" if drop is None else f"{'低' if drop >= 0 else '高'} {_f(abs(drop))}"
+
+
 def _closing(ev: list[dict], sm: dict, pm: str, L: str) -> list[dict]:
     out = []
     r = sm["stop_reason"]
@@ -141,7 +149,9 @@ def _closing(ev: list[dict], sm: dict, pm: str, L: str) -> list[dict]:
         out.append({"key": "stop", "text": f"停止：{STOP_REASONS.get(r, r)}", "tone": "neutral"})
     if f := sm["final"]:
         out.append({"key": "final", "tone": "bad" if f.get("overfit_to_oot_dev") else "ok",
-                    "text": f"最终检验：holdout {L} {_f(f.get(f'holdout_{pm}'))}，比 OOT-dev 低 {_f(f.get('drop'))}"
+                    "text": f"最终检验：holdout {L} {_f(f.get(f'holdout_{pm}'))}，比 OOT-dev {_lower(f.get('drop'))}"
+                            + (f"（默认参照模型{_lower(f['reference_drop'])}，{'多' if f['drop'] >= f['reference_drop'] else '少'}掉 "
+                               f"{_f(abs(f['drop'] - f['reference_drop']))}）" if f.get("reference_drop") is not None else "")
                             + ("，疑似对 OOT-dev 过拟合" if f.get("overfit_to_oot_dev") else "")})
     for e in ev:
         if e["type"] == "final_gate_skipped":

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api"
 import { Chat } from "@/components/Chat"
 import { TaskRail } from "@/components/TaskRail"
@@ -12,9 +12,15 @@ function remembered(): string | null {
 
 export default function App() {
   const [taskId, setTaskId] = useState<string | null>(remembered)
-  const tasks = useQuery({ queryKey: ["tasks"], queryFn: api.tasks })
-  const snap = useQuery({ queryKey: ["task", taskId], queryFn: () => api.task(taskId!), enabled: !!taskId, retry: false })
-  useTaskStream(taskId, !!snap.data && (snap.data.status === "running" || snap.data.busy))
+  // 评测运行由命令行在跑，没有事件流：运行中的版本定时重取
+  const tasks = useQuery({ queryKey: ["tasks"], queryFn: api.tasks,
+    refetchInterval: (q) => (q.state.data?.some((t) => t.eval?.running) ? 15000 : false) })
+  const snap = useQuery({ queryKey: ["task", taskId], queryFn: () => api.task(taskId!), enabled: !!taskId, retry: false,
+    refetchInterval: (q) => (q.state.data?.eval_label && q.state.data.status === "running" ? 5000 : false) })
+  const evalRunning = !!snap.data?.eval_label && snap.data.status === "running"
+  useTaskStream(taskId, !!snap.data && !snap.data.eval_label && (snap.data.status === "running" || snap.data.busy))
+  const qc = useQueryClient()
+  useEffect(() => { if (evalRunning) qc.invalidateQueries({ queryKey: ["events", taskId] }) }, [evalRunning, snap.data?.last_event_id, taskId, qc])
   const select = (id: string | null) => {
     setTaskId(id)
     try { if (id) localStorage.setItem("task", id); else localStorage.removeItem("task") } catch { /* 无痕模式等 */ }

@@ -16,3 +16,10 @@ test("ChatRun 只读任务不出续跑按钮", () => {
   expect(screen.getByText(/运行失败/)).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: /续跑/ })).toBeNull()
 })
+
+test("运行中的评测任务（命令行在跑）不出中止按钮", () => {
+  render(<QueryClientProvider client={new QueryClient()}><ChatRun snap={{ ...baseSnap, status: "running", stage: "modeling", readonly: true,
+    eval_label: "v9", run: { metric: "auc", max_rounds: 8, rounds: [], chart: [], narration: [], final: null, tree: [] } }} /></QueryClientProvider>)
+  expect(screen.getByText(/开始建模/)).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /中止/ })).toBeNull()
+})

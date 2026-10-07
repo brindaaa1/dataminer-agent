@@ -10,7 +10,7 @@ PHASE_SETUP, PHASE_ROUND, PHASE_FINALE = "setup", "round", "finale"
 
 
 def _new(kind: str, no: int | None) -> dict:
-    return {"kind": kind, "round": no, "events": [], "exp_ids": [], "states": [], "llm_calls": [], "decision": None,
+    return {"kind": kind, "round": no, "events": [], "exp_ids": [], "states": [], "llm_calls": [], "decision": None, "by_rule": False,
             "rejected": [], "evaluations": [], "recorded": None, "stop_reason": None, "final": None, "awaited": [],
             "tokens": 0, "llm_latency_s": 0.0, "ts_start": None, "ts_end": None}
 
@@ -30,6 +30,7 @@ def _add(seg: dict, e: dict):
         seg["llm_latency_s"] = round(seg["llm_latency_s"] + (pl.get("latency_s") or 0), 3)
     elif t == "decision":
         seg["decision"] = pl.get("decision")
+        seg["by_rule"] = pl.get("by") == "rule"           # 代码按规则做的决策（赛跑打平后第一次升全量），不是 LLM
     elif t == "decision_rejected":
         seg["rejected"].append(pl)
     elif t == "evaluated":

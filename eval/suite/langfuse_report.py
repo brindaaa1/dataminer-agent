@@ -7,6 +7,13 @@ def report(label: str, rows: list[dict], bases: dict, client=None):
     lf = client or langfuse_client()
     if lf is None:
         return
+    try:
+        _report(lf, label, rows, bases)
+    except Exception as e:                   # 结果文件已经写好；Langfuse 连不上不该让整次评测以失败结束（v8）
+        print(f"警告：写 Langfuse 失败，评测结果不受影响：{type(e).__name__}: {e}", flush=True)
+
+
+def _report(lf, label: str, rows: list[dict], bases: dict):
     for name in dict.fromkeys(r["dataset"] for r in rows):
         lf.create_dataset(name=f"dataminer-eval/{name}", description="DataMiner agent 结果层评测（每个种子一个条目）")
     for r in rows:

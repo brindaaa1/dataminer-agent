@@ -132,7 +132,12 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
     if best:
         m = best["metrics"]
         L += ["## 3. 最终模型", "", f"- 实验：`{best_id}`；模型：`{best['config']['model']}`；保真度：{best['config']['fidelity']}；trial 数：{best['n_trials']}（剪枝 {best['n_pruned']}）",
-              f"- 特征数：{best['n_features']}；最优参数：`{json.dumps(best['best_params'], ensure_ascii=False)}`", ""]
+              f"- 特征数：{best['n_features']}；最优参数：`{json.dumps(best['best_params'], ensure_ascii=False)}`"]
+        tie = p.get("race_tie")
+        if tie and len(tie["tied"]) > 1:
+            L.append(f"- 赛跑打平：{'、'.join(tie['tied'])} 在 OOT-dev 上与最优差距小于可分辨的最小提升（MDE {tie['mde']:.4f}），效果相当；"
+                     f"按偏好顺序（config race.tie_preference）推荐 {tie['recommended']}。")
+        L.append("")
         names = [pm] + [k for k in METRICS if k != pm]                    # 主指标放第一列并加粗
         bold = lambda k, t: f"**{t}**" if k == pm else t
 
@@ -144,7 +149,10 @@ def build_report(cfg: dict, spec, store, p: dict, final: dict | None, oot_used: 
             L.append(row("holdout", final, "holdout"))
         L += ["", f"- valid − OOT-dev gap：{m['gap']:.4f}；分数 PSI（valid→OOT-dev）：{m.get('score_psi', float('nan')):.4f}；OOT-dev 使用次数：{oot_used}", ""]
         if final and final["overfit_to_oot_dev"]:
-            risks.append(f"holdout {pm.upper()} 比 OOT-dev 低 {final['drop']:.4f}，超过 δ={cfg['final_gate']['delta']}：**疑似对 OOT-dev 过拟合**。")
+            ref = final.get("reference_drop")
+            risks.append(f"holdout {pm.upper()} 比 OOT-dev 低 {final['drop']:.4f}"
+                         + (f"（默认参照模型自己低 {ref:.4f}），比默认参照模型多掉 {final['drop'] - ref:.4f}" if ref is not None else "")
+                         + f"，超过 δ={cfg['final_gate']['delta']}：**疑似对 OOT-dev 过拟合**。")
         if has_time:
             oot_pred = np.load(art / "experiments" / best_id / "oot_dev_pred.npy")
             val_pred = np.load(art / "experiments" / best_id / "valid_pred.npy")

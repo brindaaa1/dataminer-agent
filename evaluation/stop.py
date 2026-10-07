@@ -24,9 +24,10 @@ def stop_check(*, cfg, oot_budget, round_no: int, max_rounds: int, remaining: di
     return None
 
 
-def history_mark(verdict: str, fidelity: str | None, delta: float | None) -> str:
+def history_mark(verdict: str, fidelity: str | None, delta: float | None, min_up: float = 0.0) -> str:
     """记入 history_verdicts 的标记。低保真、不确定、但点估计比对照好 → INCONCLUSIVE_UP，不计入 NO_PROGRESS：
-    它可以升全量复验，连续 3 轮就停会让 agent 没机会去升（v4 评测 lending_club）。"""
-    if verdict == "INCONCLUSIVE" and fidelity == "low" and delta is not None and delta > 0:
+    它可以升全量复验，连续 3 轮就停会让 agent 没机会去升（v4 评测 lending_club）。
+    "好"要好过 min_up（0.5×MDE）：低保真接近全量时差在 ±0.002 抛硬币，差 > 0 就算会让 agent 停不下来（v8 评测 lending_club）。"""
+    if verdict == "INCONCLUSIVE" and fidelity == "low" and delta is not None and delta > max(min_up, 0.0):
         return "INCONCLUSIVE_UP"
     return verdict

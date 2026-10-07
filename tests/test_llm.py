@@ -131,3 +131,45 @@ def test_openai_client_retries_more_on_flaky_network(monkeypatch):
 def test_deepseek_max_tokens_leaves_room_for_thinking():
     """v2 评测 lending_club s2：推理用满 8000 个 token，回复为空。"""
     assert load_config()["llm"]["providers"]["deepseek"]["max_tokens"] >= 16000
+
+
+def test_openai_compat_client_has_timeout(monkeypatch):
+    """v8 hotel s1：DeepSeek 断线时 SDK 默认每次等 600 秒、再重试 6 次，一轮 DECIDE 卡了半小时以上。"""
+    import openai
+    seen = {}
+    monkeypatch.setattr(openai, "OpenAI", lambda **kw: seen.update(kw) or SimpleNamespace())
+    cfg = load_config()
+    make_llm("deepseek", cfg, api_key="x")
+    assert seen["timeout"] == cfg["llm"]["timeout_sec"]
+
+
+class SlowThenOk:
+    """第一次调用卡住（服务端一直发保活数据，SDK 的读超时不触发），第二次正常返回。"""
+    def __init__(self, stall: float):
+        self.n, self.stall = 0, stall
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _create(self, **kw):
+        import time
+        self.n += 1
+        if self.n <= 1:
+            time.sleep(self.stall)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))], usage=SimpleNamespace(total_tokens=1))
+
+
+def test_call_has_a_total_deadline_and_retries():
+    """v10c lending_club s1：一次 PLAN 调用等了 2132 秒才返回；SDK 的 timeout 只管两次收到数据的间隔，不管总时长。"""
+    import time
+    c = SlowThenOk(stall=2.0)
+    llm = OpenAICompatLLM("deepseek-flash", "http://x", "K", 100, client=c, deadline=0.2, deadline_retries=2)
+    t = time.time()
+    assert llm.complete("s", "u")[0] == "ok" and c.n == 2 and time.time() - t < 1.5
+
+
+def test_deadline_exhausted_raises_timeout():
+    import pytest as _pt
+    c = SlowThenOk(stall=2.0)
+    c.n = -5                                                       # 前几次都卡住
+    llm = OpenAICompatLLM("deepseek-flash", "http://x", "K", 100, client=c, deadline=0.1, deadline_retries=1)
+    with _pt.raises(TimeoutError):
+        llm.complete("s", "u")

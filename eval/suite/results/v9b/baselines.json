@@ -1,0 +1,61 @@
+{
+ "hotel_bookings": {
+  "b0": {
+   "name": "b0_v9b_hotel_bookings",
+   "oot_dev_auc": 0.8194713660749873,
+   "oot_dev_ks": 0.48655786389548844,
+   "holdout_auc": 0.7760766872707171,
+   "wall_sec": 0.33159518241882324,
+   "n_features": 27,
+   "best_iter": 309
+  },
+  "b1": {
+   "name": "b1_v9b_hotel_bookings",
+   "oot_dev_auc": 0.8229564935197918,
+   "oot_dev_ks": 0.48485142073067944,
+   "holdout_auc": 0.7766251660437448,
+   "wall_sec": 201.97402691841125,
+   "n_features": 27,
+   "best_estimator": "extra_tree",
+   "time_budget": 202.0,
+   "best_config": {
+    "n_estimators": 51,
+    "max_features": 0.4368445238771565,
+    "max_leaves": 1950,
+    "criterion": "entropy"
+   }
+  }
+ },
+ "lending_club": {
+  "b0": {
+   "name": "b0_v9b_lending_club",
+   "oot_dev_auc": 0.6410340843621717,
+   "oot_dev_ks": 0.2086977425847883,
+   "holdout_auc": 0.6473875093262106,
+   "wall_sec": 0.13978910446166992,
+   "n_features": 35,
+   "best_iter": 32
+  },
+  "b1": {
+   "name": "b1_v9b_lending_club",
+   "oot_dev_auc": 0.6580573531670083,
+   "oot_dev_ks": 0.24266796115304112,
+   "holdout_auc": 0.6627287530477899,
+   "wall_sec": 115.90270280838013,
+   "n_features": 35,
+   "best_estimator": "xgb_limitdepth",
+   "time_budget": 115.9,
+   "best_config": {
+    "n_estimators": 156,
+    "max_depth": 3,
+    "min_child_weight": 1.5796725148160433,
+    "learning_rate": 0.05679001950555527,
+    "subsample": 0.96929696499603,
+    "colsample_bylevel": 0.6404414422095518,
+    "colsample_bytree": 1.0,
+    "reg_alpha": 0.0009765625,
+    "reg_lambda": 3.2479771149461407
+   }
+  }
+ }
+}

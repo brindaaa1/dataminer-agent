@@ -68,3 +68,26 @@ def test_model_card_survives_explain_failure(tmp_path, monkeypatch):
     assert o.run().value == "DONE"
     card = open(f"{cfg['paths']['reports_root']}/model_card_t1.md").read()
     assert "## 6. 特征清单" in card and "特征贡献计算失败" in card and "## 8. 风险提示" in card
+
+
+def test_overfit_to_oot_dev_is_relative_to_reference_drift(tmp_path):
+    """固定的 0.02 在 hotel 上每次都报（默认参照模型自己 OOT-dev → holdout 就掉 0.043）。最终检验时同时量出参照模型的下滑，
+    多掉超过 δ 才算疑似过拟合；agent 运行中仍看不到 holdout。"""
+    cfg = make_toy(tmp_path)
+    cfg["evaluator"]["overfit_gap"] = {"mode": "relative", "tolerance": 0.05}
+    o = Orchestrator(toy_spec(cfg), cfg, PolicyMockLLM(), FinalGate("toy", cfg, "t1"), "t1")
+    o.run()
+    f = o.p["final"]
+    assert f["reference_drop"] is not None
+    assert f["overfit_to_oot_dev"] == (f["drop"] - f["reference_drop"] > cfg["final_gate"]["delta"])
+    rep = build_report(cfg, o.spec, o.store, o.p, {**f, "overfit_to_oot_dev": True, "drop": f["reference_drop"] + 0.05}, 3, PolicyMockLLM())
+    assert "比默认参照模型多掉 0.0500" in open(rep["model_card"]).read()
+
+
+def test_model_card_lists_tied_race_models(tmp_path):
+    cfg = make_toy(tmp_path)
+    o = Orchestrator(toy_spec(cfg), cfg, PolicyMockLLM(), FinalGate("toy", cfg, "t1"), "t1")
+    o.run()
+    p = {**o.p, "race_tie": {"recommended": "lgbm", "tied": ["lgbm", "catboost"], "best": "catboost", "mde": 0.0099}}
+    card = open(build_report(cfg, o.spec, o.store, p, o.p["final"], 3, PolicyMockLLM())["model_card"]).read()
+    assert "赛跑打平" in card and "lgbm、catboost" in card and "0.0099" in card

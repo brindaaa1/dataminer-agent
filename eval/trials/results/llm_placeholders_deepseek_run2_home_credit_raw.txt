@@ -1,0 +1,118 @@
+{
+  "placeholders": [
+    {
+      "table": "application_train",
+      "column": "DAYS_EMPLOYED",
+      "value": "365243",
+      "reason": "最大值 365243 出现 21451 次，远超正常天数，疑似表示失业/缺失的哨兵值。"
+    },
+    {
+      "table": "application_train",
+      "column": "OWN_CAR_AGE",
+      "value": "99",
+      "reason": "车辆年龄 99 年不合常理，且出现 23799 次，疑似缺失标记。"
+    },
+    {
+      "table": "application_train",
+      "column": "ORGANIZATION_TYPE",
+      "value": "XNA",
+      "reason": "XNA 出现 21451 次，是表示未知/缺失的类别。"
+    },
+    {
+      "table": "application_train",
+      "column": "AMT_REQ_CREDIT_BUREAU_YEAR",
+      "value": "-1",
+      "reason": "征信查询次数出现 -1 且达 2400 次，现实不可能为负，疑似缺失标记。"
+    },
+    {
+      "table": "previous_application",
+      "column": "NAME_CASH_LOAN_PURPOSE",
+      "value": "XAP",
+      "reason": "XAP 出现 306169 次，表示不适用/未知。"
+    },
+    {
+      "table": "previous_application",
+      "column": "NAME_CASH_LOAN_PURPOSE",
+      "value": "XNA",
+      "reason": "XNA 出现 221299 次，表示未知/缺失。"
+    },
+    {
+      "table": "previous_application",
+      "column": "NAME_PAYMENT_TYPE",
+      "value": "XNA",
+      "reason": "XNA 出现 203343 次，表示未知/缺失。"
+    },
+    {
+      "table": "previous_application",
+      "column": "CODE_REJECT_REASON",
+      "value": "XAP",
+      "reason": "XAP 出现 446267 次，表示不适用/未知。"
+    },
+    {
+      "table": "previous_application",
+      "column": "NAME_GOODS_CATEGORY",
+      "value": "XNA",
+      "reason": "XNA 出现 310392 次，表示未知/缺失。"
+    },
+    {
+      "table": "previous_application",
+      "column": "NAME_PORTFOLIO",
+      "value": "XNA",
+      "reason": "XNA 出现 119959 次，表示未知/缺失。"
+    },
+    {
+      "table": "previous_application",
+      "column": "NAME_PRODUCT_TYPE",
+      "value": "XNA",
+      "reason": "XNA 出现 350795 次，表示未知/缺失。"
+    },
+    {
+      "table": "previous_application",
+      "column": "NAME_SELLER_INDUSTRY",
+      "value": "XNA",
+      "reason": "XNA 出现 279068 次，表示未知/缺失。"
+    },
+    {
+      "table": "previous_application",
+      "column": "NAME_YIELD_GROUP",
+      "value": "XNA",
+      "reason": "XNA 出现 167238 次，表示未知/缺失。"
+    },
+    {
+      "table": "previous_application",
+      "column": "DAYS_FIRST_DRAWING",
+      "value": "365243",
+      "reason": "出现 311024 次，远超正常天数，疑似缺失/不适用标记。"
+    },
+    {
+      "table": "previous_application",
+      "column": "DAYS_FIRST_DUE",
+      "value": "365243",
+      "reason": "出现 13169 次，远超正常天数，疑似缺失/不适用标记。"
+    },
+    {
+      "table": "previous_application",
+      "column": "DAYS_LAST_DUE_1ST_VERSION",
+      "value": "365243",
+      "reason": "出现 30671 次，远超正常天数，疑似缺失/不适用标记。"
+    },
+    {
+      "table": "previous_application",
+      "column": "DAYS_LAST_DUE",
+      "value": "365243",
+      "reason": "出现 70430 次，远超正常天数，疑似缺失/不适用标记。"
+    },
+    {
+      "table": "previous_application",
+      "column": "DAYS_TERMINATION",
+      "value": "365243",
+      "reason": "出现 75626 次，远超正常天数，疑似缺失/不适用标记。"
+    },
+    {
+      "table": "previous_application",
+      "column": "SELLERPLACE_AREA",
+      "value": "-1",
+      "reason": "面积出现 -1 且达 248317 次，现实不可能，疑似缺失标记。"
+    }
+  ]
+}

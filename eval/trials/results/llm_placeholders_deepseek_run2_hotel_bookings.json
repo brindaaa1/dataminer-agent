@@ -1,0 +1,26 @@
+[
+ {
+  "table": "hotel_bookings",
+  "column": "adr",
+  "value": "-1.0",
+  "reason": "房价不可能为负，且-1.0出现721次，为高频异常值，疑似缺失/未知占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "meal",
+  "value": "Undefined",
+  "reason": "餐食类型中出现明确未知字符串，且出现409次，多于部分真实类别，疑似占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "lead_time",
+  "value": "999",
+  "reason": "提前预订天数999天远超常规，且出现360次，疑似用999代替未知。",
+  "kind": "llm",
+  "source": "deepseek"
+ }
+]

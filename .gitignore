@@ -14,6 +14,7 @@ reports/
 !tests/fixtures/reports/
 workspace/
 .superpowers/
+.venvs/
 
 # 编辑器本地历史（含 .env 快照），不能提交
 .history/

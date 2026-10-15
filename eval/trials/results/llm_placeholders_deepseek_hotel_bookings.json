@@ -1,0 +1,26 @@
+[
+ {
+  "table": "hotel_bookings",
+  "column": "lead_time",
+  "value": "999",
+  "reason": "最大值为999且该值出现360次，明显高于其他大值，符合用999作未知/缺失哨兵值的特征。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "meal",
+  "value": "Undefined",
+  "reason": "该列用Undefined表示未知餐型，出现409次，明显是可识别的占位字符串。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "adr",
+  "value": "-1.0",
+  "reason": "房价不可能为负，-1.0出现721次且为最小值，明显是缺失/未知占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ }
+]

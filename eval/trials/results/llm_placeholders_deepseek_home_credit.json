@@ -1,0 +1,154 @@
+[
+ {
+  "table": "application_train",
+  "column": "DAYS_EMPLOYED",
+  "value": "365243",
+  "reason": "365243 出现 21451 次且远超正常负值范围，现实中不可能的天数，代表未就业/未知。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "application_train",
+  "column": "OWN_CAR_AGE",
+  "value": "99.0",
+  "reason": "99 出现 23799 次，汽车年龄 99 年不可能，且与无车/缺失相关。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "application_train",
+  "column": "ORGANIZATION_TYPE",
+  "value": "XNA",
+  "reason": "XNA 出现 21451 次，是未知/缺失的组织类型占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_REQ_CREDIT_BUREAU_YEAR",
+  "value": "-1.0",
+  "reason": "-1.0 出现 2400 次，请求次数不可能为负，明显是未知占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "SELLERPLACE_AREA",
+  "value": "-1",
+  "reason": "-1 出现 248317 次，销售区域不能为负，代表未知区域。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_FIRST_DRAWING",
+  "value": "365243.0",
+  "reason": "365243.0 出现 311024 次，是远离正常日期范围的占位值，代表无首次提款日期。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_FIRST_DUE",
+  "value": "365243.0",
+  "reason": "365243.0 出现 13169 次，是远离正常日期范围的占位值，代表无首次应还款日。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_LAST_DUE_1ST_VERSION",
+  "value": "365243.0",
+  "reason": "365243.0 出现 30671 次，是远离正常日期范围的占位值。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_LAST_DUE",
+  "value": "365243.0",
+  "reason": "365243.0 出现 70430 次，是远离正常日期范围的占位值。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_TERMINATION",
+  "value": "365243.0",
+  "reason": "365243.0 出现 75626 次，是远离正常日期范围的占位值。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_CASH_LOAN_PURPOSE",
+  "value": "XAP",
+  "reason": "XAP 出现 306169 次，是占位/未指明用途。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_CASH_LOAN_PURPOSE",
+  "value": "XNA",
+  "reason": "XNA 出现 221299 次，是未知/缺失用途占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "CODE_REJECT_REASON",
+  "value": "XAP",
+  "reason": "XAP 出现 446267 次，约占 81%，代表无拒绝原因/不适用。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_GOODS_CATEGORY",
+  "value": "XNA",
+  "reason": "XNA 出现 310392 次，是未知商品类别占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_PORTFOLIO",
+  "value": "XNA",
+  "reason": "XNA 出现 119959 次，是未知产品组合占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_PRODUCT_TYPE",
+  "value": "XNA",
+  "reason": "XNA 出现 350795 次，是未知产品类型占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_SELLER_INDUSTRY",
+  "value": "XNA",
+  "reason": "XNA 出现 279068 次，是未知卖方行业占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_YIELD_GROUP",
+  "value": "XNA",
+  "reason": "XNA 出现 167238 次，是未知收益率分组占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_PAYMENT_TYPE",
+  "value": "XNA",
+  "reason": "XNA 出现 203343 次，是未知付款方式占位。",
+  "kind": "llm",
+  "source": "deepseek"
+ }
+]

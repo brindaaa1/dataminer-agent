@@ -1,0 +1,1 @@
+{"placeholders":[{"table":"lending_club","column":"earliest_cr_line","value":"Jan-1900","reason":"1900年的最早信用线现实中不可能，且以589次成为最高频值"},{"table":"lending_club","column":"mths_since_last_delinq","value":"999.0","reason":"999个月明显是占位值，出现14759次且与缺失率25.29%接近"},{"table":"lending_club","column":"revol_util","value":"-1.0","reason":"信用卡利用率不可能为负，-1出现1163次为最高频值"}]}

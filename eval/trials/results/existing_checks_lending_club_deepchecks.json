@@ -1,0 +1,56 @@
+[
+ {
+  "table": "lending_club",
+  "column": "term",
+  "kind": "Single Value in Column",
+  "source": "deepchecks"
+ },
+ {
+  "table": "lending_club",
+  "column": "id",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "lending_club",
+  "column": "loan_amnt",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "lending_club",
+  "column": "funded_amnt",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "lending_club",
+  "column": "fico_range_low",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "lending_club",
+  "column": "fico_range_high",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "lending_club",
+  "column": "issue_d",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "lending_club",
+  "column": "emp_length",
+  "kind": "String Mismatch",
+  "source": "deepchecks"
+ },
+ {
+  "table": "lending_club",
+  "column": "home_ownership",
+  "kind": "String Mismatch",
+  "source": "deepchecks"
+ }
+]

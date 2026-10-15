@@ -1,0 +1,122 @@
+[
+ {
+  "table": "hotel_bookings",
+  "column": "agent",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "company",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "adults",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "babies",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "previous_cancellations",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "previous_bookings_not_canceled",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "is_canceled",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "lead_time",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "stays_in_weekend_nights",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "stays_in_week_nights",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "children",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "babies",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "is_repeated_guest",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "previous_cancellations",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "previous_bookings_not_canceled",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "booking_changes",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "days_in_waiting_list",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "adr",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "required_car_parking_spaces",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "total_of_special_requests",
+  "kind": "ZEROS",
+  "source": "ydata"
+ }
+]

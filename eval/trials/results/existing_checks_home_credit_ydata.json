@@ -1,0 +1,1112 @@
+[
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_12",
+  "kind": "CONSTANT",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "EMERGENCYSTATE_MODE",
+  "kind": "IMBALANCE",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "OWN_CAR_AGE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "OCCUPATION_TYPE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "EXT_SOURCE_1",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "EXT_SOURCE_3",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "APARTMENTS_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BEGINEXPLUATATION_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BUILD_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ENTRANCES_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMAX_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMIN_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAPARTMENTS_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAREA_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_AVG",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "APARTMENTS_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BEGINEXPLUATATION_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BUILD_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ENTRANCES_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMAX_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMIN_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAPARTMENTS_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAREA_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "APARTMENTS_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BEGINEXPLUATATION_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BUILD_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ENTRANCES_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMAX_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMIN_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAPARTMENTS_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAREA_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_MEDI",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FONDKAPREMONT_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "HOUSETYPE_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "TOTALAREA_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "WALLSMATERIAL_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "EMERGENCYSTATE_MODE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_HOUR",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_DAY",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_WEEK",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_MON",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_QRT",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_YEAR",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_INCOME_TOTAL",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_MOBIL",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_CONT_MOBILE",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "OBS_30_CNT_SOCIAL_CIRCLE",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "OBS_60_CNT_SOCIAL_CIRCLE",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_2",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_4",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_7",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_10",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_15",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_17",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_19",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_20",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_21",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_DAY",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_QRT",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "dpd_after_3m",
+  "kind": "UNIQUE",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "TARGET",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "CNT_CHILDREN",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_EMP_PHONE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_WORK_PHONE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_PHONE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_EMAIL",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "REG_REGION_NOT_LIVE_REGION",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "REG_REGION_NOT_WORK_REGION",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVE_REGION_NOT_WORK_REGION",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "REG_CITY_NOT_LIVE_CITY",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "REG_CITY_NOT_WORK_CITY",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVE_CITY_NOT_WORK_CITY",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_AVG",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_AVG",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_AVG",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_AVG",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_AVG",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_AVG",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_MODE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_MODE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_MODE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMAX_MODE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_MODE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_MODE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_MODE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_MEDI",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_MEDI",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_MEDI",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMAX_MEDI",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_MEDI",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_MEDI",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_MEDI",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "OBS_30_CNT_SOCIAL_CIRCLE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "DEF_30_CNT_SOCIAL_CIRCLE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "OBS_60_CNT_SOCIAL_CIRCLE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "DEF_60_CNT_SOCIAL_CIRCLE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "DAYS_LAST_PHONE_CHANGE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_2",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_3",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_4",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_5",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_6",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_7",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_8",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_9",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_10",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_11",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_12",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_13",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_14",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_15",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_16",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_17",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_18",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_19",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_20",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_21",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_HOUR",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_DAY",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_WEEK",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_MON",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_QRT",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_REQ_CREDIT_BUREAU_YEAR",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "DAYS_CREDIT_ENDDATE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "DAYS_ENDDATE_FACT",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_MAX_OVERDUE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_DEBT",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_LIMIT",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_ANNUITY",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "CREDIT_DAY_OVERDUE",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_MAX_OVERDUE",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_DEBT",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_LIMIT",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_OVERDUE",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_ANNUITY",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "SK_ID_BUREAU",
+  "kind": "UNIQUE",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "CREDIT_DAY_OVERDUE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_MAX_OVERDUE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "CNT_CREDIT_PROLONG",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_DEBT",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_LIMIT",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_OVERDUE",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_ANNUITY",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_ANNUITY",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_DOWN_PAYMENT",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_GOODS_PRICE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "RATE_DOWN_PAYMENT",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "RATE_INTEREST_PRIMARY",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "RATE_INTEREST_PRIVILEGED",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_TYPE_SUITE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "CNT_PAYMENT",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_FIRST_DRAWING",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_FIRST_DUE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_LAST_DUE_1ST_VERSION",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_LAST_DUE",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_TERMINATION",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "NFLAG_INSURED_ON_APPROVAL",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_DOWN_PAYMENT",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "SELLERPLACE_AREA",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "SK_ID_PREV",
+  "kind": "UNIQUE",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_APPLICATION",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_CREDIT",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_DOWN_PAYMENT",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "RATE_DOWN_PAYMENT",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "SELLERPLACE_AREA",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "CNT_PAYMENT",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "previous_application",
+  "column": "NFLAG_INSURED_ON_APPROVAL",
+  "kind": "ZEROS",
+  "source": "ydata"
+ }
+]

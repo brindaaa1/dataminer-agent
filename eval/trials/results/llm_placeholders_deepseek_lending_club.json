@@ -1,0 +1,26 @@
+[
+ {
+  "table": "lending_club",
+  "column": "mths_since_last_delinq",
+  "value": "999.0",
+  "reason": "月数为999现实中不可能，出现14759次且与缺失率0.2529一致，明显是缺失占位符。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "lending_club",
+  "column": "revol_util",
+  "value": "-1.0",
+  "reason": "信用卡利用率不可能为负，-1出现1163次远高于其他单个取值，疑似未知/缺失占位符。",
+  "kind": "llm",
+  "source": "deepseek"
+ },
+ {
+  "table": "lending_club",
+  "column": "earliest_cr_line",
+  "value": "Jan-1900",
+  "reason": "信用起始日期为1900年现实中不可能，且出现589次为最高频，疑似未知占位符。",
+  "kind": "llm",
+  "source": "deepseek"
+ }
+]

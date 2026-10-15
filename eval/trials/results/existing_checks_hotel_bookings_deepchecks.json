@@ -1,0 +1,44 @@
+[
+ {
+  "table": "hotel_bookings",
+  "column": "reservation_status",
+  "kind": "Feature Label Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "arrival_date_year",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "arrival_date_month",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "arrival_date_week_number",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "reservation_status_date",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": "meal",
+  "kind": "String Mismatch",
+  "source": "deepchecks"
+ },
+ {
+  "table": "hotel_bookings",
+  "column": null,
+  "kind": "Data Duplicates",
+  "source": "deepchecks"
+ }
+]

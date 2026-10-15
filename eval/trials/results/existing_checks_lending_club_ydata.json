@@ -1,0 +1,146 @@
+[
+ {
+  "table": "lending_club",
+  "column": "term",
+  "kind": "CONSTANT",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "emp_length",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "mths_since_last_delinq",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "mths_since_last_record",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "tot_coll_amt",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "tot_cur_bal",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "open_acc_6m",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "open_il_12m",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "il_util",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "all_util",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "total_rev_hi_lim",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "inq_last_12m",
+  "kind": "MISSING",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "annual_inc",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "collections_12_mths_ex_med",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "tot_coll_amt",
+  "kind": "SKEWED",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "delinq_2yrs",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "inq_last_6mths",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "pub_rec",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "collections_12_mths_ex_med",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "acc_now_delinq",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "tot_coll_amt",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "open_acc_6m",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "open_il_12m",
+  "kind": "ZEROS",
+  "source": "ydata"
+ },
+ {
+  "table": "lending_club",
+  "column": "pub_rec_bankruptcies",
+  "kind": "ZEROS",
+  "source": "ydata"
+ }
+]

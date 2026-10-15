@@ -1,0 +1,428 @@
+[
+ {
+  "table": "application_train",
+  "column": "FLAG_DOCUMENT_12",
+  "kind": "Single Value in Column",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_OWN_CAR",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_CREDIT",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "AMT_GOODS_PRICE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "NAME_INCOME_TYPE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "DAYS_EMPLOYED",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "OWN_CAR_AGE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "FLAG_EMP_PHONE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "REGION_RATING_CLIENT",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "REGION_RATING_CLIENT_W_CITY",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "ORGANIZATION_TYPE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "APARTMENTS_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BEGINEXPLUATATION_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BUILD_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "ENTRANCES_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMAX_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMIN_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAPARTMENTS_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAREA_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_AVG",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "APARTMENTS_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BEGINEXPLUATATION_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BUILD_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "ENTRANCES_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMAX_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMIN_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAPARTMENTS_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAREA_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "APARTMENTS_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "BASEMENTAREA_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BEGINEXPLUATATION_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "YEARS_BUILD_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "COMMONAREA_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "ELEVATORS_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "ENTRANCES_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMAX_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "FLOORSMIN_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LANDAREA_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAPARTMENTS_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "LIVINGAREA_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAPARTMENTS_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "NONLIVINGAREA_MEDI",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "TOTALAREA_MODE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "OBS_30_CNT_SOCIAL_CIRCLE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "OBS_60_CNT_SOCIAL_CIRCLE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "application_train",
+  "column": "NAME_INCOME_TYPE",
+  "kind": "String Mismatch",
+  "source": "deepchecks"
+ },
+ {
+  "table": "bureau",
+  "column": "CREDIT_DAY_OVERDUE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "bureau",
+  "column": "AMT_CREDIT_SUM_OVERDUE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_CONTRACT_TYPE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_APPLICATION",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_CREDIT",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_DOWN_PAYMENT",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "AMT_GOODS_PRICE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "RATE_DOWN_PAYMENT",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_DECISION",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "NAME_YIELD_GROUP",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_FIRST_DUE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_LAST_DUE_1ST_VERSION",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_LAST_DUE",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ },
+ {
+  "table": "previous_application",
+  "column": "DAYS_TERMINATION",
+  "kind": "Feature-Feature Correlation",
+  "source": "deepchecks"
+ }
+]
